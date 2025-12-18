@@ -1,0 +1,197 @@
+
+            The AcCoRD Simulator
+            (Actor-based Communication via Reaction-Diffusion)
+
+This document is the CHANGELOG for AcCoRD v1.4.2 (2020-02-12)
+- [NEW] Updated source code so that it can be compiled in MacOS systems. Executables are not provided but Mac OS users should be able to compile it themselves using the same syntax as that for Linux users
+- [CHANGE] Removed build scripts and executables specific to RHEL/CentOS Linux. The same files can be used as with Debian/Ubuntu Linux, as long as the executables are compiled on a RHEL/CentOS Linux operating system. This change was made to streamline future updates.
+- [FIX] Updated video generator code for compatibility from MATLAB R2019b. Should still be backwards compatible to R2016b.
+- [FIX] Corrected indexing of plots where markers are chosen to draw the individual molecules in the simulated environment
+
+Changes introduced in AcCoRD v1.4.1 (2019-04-16)
+- [NEW] added a "Quick Plot" function for empty environments, accordEmptyEnvironmentQuick, which takes a single argument (path to configuration file) and plots all of the regions and actors with default plot settings. Corresponding note added to the user manual
+- [FIX] Updated recommended MATLAB version to R2016b, because newer version of function to check strings is used when importing a configuration file (this call had changed some number of versions ago but compatibility with R2015a wasn't checked)
+
+Changes introduced in AcCoRD v1.4 (2018-08-06)
+- [NEW] added the A Priori Monte Carlo (APMC) Absorption algorithm, which enables accurate simulation with much larger time steps. Included as a new option for surface reactions. This initial implementation requires that the corresponding reaction rate must be infinite, otherwise the reaction will never occur. A threshold can constrain its use for additional runtime efficiency.
+- [NEW] added a sample configuration file that uses the APMC absorption algorithm. Simulated environment has a point transmitter and a single absorbing sphere.
+- [NEW] added a "Quick Plot" function, accordQuickPlot, which takes a single argument and plots all time-varying average observations by all passive actors. It is implemented as a simpler alternative to accordPlotMakerWrapper. It can also be used to import AcCoRD output, but in such a case it will only load data from the first corresponding seed file.
+- [FIX] corrected check on molecule transitions between parent and child regions when a molecule is initialized directly at the parent/child boundary
+- [FIX] fixed the loading of surface reaction parameters when there are products that are not released away from the surface.
+- [FIX] corrected missing assignment for first order reactions that don't have any product molecules to place. Led to memory error when first molecule in a list has to be removed 
+
+Changes introduced in AcCoRD v1.3 (2018-07-31)
+- [NEW] added PDF User's Manual to replace the helper text files and many pages on the AcCoRD homepage, to make it easier to expand and update as needed.
+- [ENHANCEMENT] modified default list of actors and regions to plot so that EVERYTHING is plotted and not just the first region and first actor. This default list is more user friendly.
+- [ENHANCEMENT] added checks on some active actor parameters because they are only conditionally necessary
+- [FIX] fixed detection of actors that are defined as the union of more than 1 region. JSON imported the list of regions as a string array and not a cell array
+- [FIX] fixed bug that prevent an environment from being plotted if the plot list included a point region or actor. A new warning is added to state that point actors and regions are not plotted
+
+Changes introduced in AcCoRD v1.2 (2018-05-30)
+- [NEW] added plotting molecules as 3D shapes instead of only as markers, which is useful for visualizing depth. Added the sphere shape as an option.
+- [NEW] online documentation migrated to University of Warwick
+- [FIX] corrected implementation of replication reactions, where a first order reactant produces at least one copy of itself. If such a reactant had reacted again within the same microscopic time step, then the new molecule(s) previously went missing.
+- [FIX] corrected calculation of diffusion propensity when more than 1 molecule is added to a subvolume
+- [FIX] corrected limit on the number of actions made by passive actors.
+- [FIX] updated code that writes to MATLAB output file so that filename is not cropped if "fileName" has a period in it
+- [FIX] corrected the range generated for 3D Empirical PMFs (was off by 1).
+- [FIX] fixed typo in comment describing implementation of reactions for "new" microscopic molecules (created in current time step).
+
+Changes introduced in AcCoRD v1.1 (2016-12-24)
+- [NEW] added net fluid flow. Can be defined globally and in individual regions. Each molecule can have its own flow specification. Currently, only type of flow available is steady uniform flow.
+- [NEW] added two new sample configuration files that use flow. One is a simple unbounded region with a single flow vector. The second is a hybrid box with a different flow vector in each region.
+- [ENHANCEMENT] increased MATLAB import time by about an order of magnitude. Simulation output files are now fully scanned in a single call, instead of being read line-by-line.
+- [ENHANCEMENT] simplified microscopic algorithm to detect whether a given type of molecule is able to move in a given region
+- [FIX] improved algorithm that places mesoscopic molecules in the microscopic regime so that the proposed molecule trajectory is checked for boundary collisions before the molecule is placed.
+- [FIX] added import of local (region) diffusion coefficients to MATLAB
+- [FIX] corrected the default subvolume base size if it is defined incorrectly
+- [FIX] corrected the detection of a missing surface reaction probability for surface reactions
+
+Changes introduced in AcCoRD v1.0 (2016-10-31)
+- [NEW] added "Burst" modulation, which does not modulate binary data but always releases molecules. Can release multiple types of molecules
+- [NEW] added local diffusion coefficients defined for individual regions
+- [NEW] added local diffusion coefficient to apply specifically to calculate a surface interaction reaction probability
+- [NEW] added parameter to repeat every frame (a specified number of times) when generating a video of simulation output, which reduces the apparent frame rate
+- [NEW] added parmeter to control the number of visible faces in spherical objects that are drawn in MATLAB
+- [NEW] added parameters to set the line width and line style of objects drawn in MATLAB
+- [NEW] added option to display a passive actor molecule counter when generating a video of simulation output. Display can have custom prefix text and applies to one type of molecule. Multiple displays can be used simultaneously. 
+- [ENHANCEMENT] changed convention for defining region anchor coordinates and the number of subvolumes along each dimension of rectangular regions. Old convention is still supported
+- [ENHANCEMENT] improved memory usage of microscopic regions by moving mesoscopic-specific subvolume parameters from the generic subvolume structure to the mesoscopic subvolume structure
+- [ENHANCEMENT] adjusted default diffusion coefficients used for calculating surface interaction reaction probabilities. Will use correct molecule's default diffusion coefficient, even if the coefficient was defined locally for the region in question. The reactant's coefficient is used for absorption and membrane reactions. The first product's coefficient is used for desorption reactions.
+- [ENHANCEMENT] added warnings for defining passive actor parameters for active actors (or vice versa)
+- [ENHANCEMENT] changed mutual information calculations in MATLAB plotting utilities to use log2 (bits) instead of log (nats)
+- [ENHANCEMENT] changed default annotation background color in the video generation script from transparent to white
+- [FIX] corrected comment in MATLAB import function accordImport about where the output files need to be
+- [UPDATE] Modified MATLAB import function to accommodate local diffusion coefficients for regions and surface interaction reactions, simpler region placement parameters, and burst modulation
+
+Changes introduced in AcCoRD v0.7.0.1 (public beta, 2016-08-30)
+- [NEW] added plotting of rectangle regions
+- [NEW] added measurement of simulation run time to the output summary file
+- [FIX] corrected diffusion event propensity at hybrid interface when molecule has a diffusion coefficient of 0
+- [FIX] corrected calculation of region volume when a normal region has a surface child region inside
+- [FIX] modified range of uniform RV generation from [0,1] to [0,1). Allowing the generation of 1 was causing problems when the RV was being used for indexing
+- [FIX] corrected cases of incorrect indexing of active and passive actors
+- [FIX] corrected calculation of spherical volume from integer to double (the fraction 4/3 was being evaluated as 4/3 = 1)
+- [FIX] added calls to addpath in some MATLAB files to make the JSON code visible
+- [FIX] added (empty) plotting of point actors. Will not cause error, although nothing will actually be plotted
+- [FIX] corrected MATLAB import when a surface reaction is "Normal" and so has no defined surface reaction probability type
+- [FIX] changed default axis clipping setting from 'off' to 'on' in the wrapper function for plotting simulation results
+
+Changes introduced in AcCoRD v0.7 (public beta, 2016-07-09)
+- [NEW] added functions for plotting simulation data in Matlab, based on passive actor observations or known probability distributions. Options include time-varying signals (either single realizations or averaged signals), probability mass functions, cumulative distribution functions, and mutual information. Figures can be in 2D or 3D as appropriate
+- [NEW] added option to display all of region's subvolumes when drawing instead of just the outer boundary. This makes display of multiscale and hybrid environments easier to understand
+- [NEW] added function to immediately plot the system described by a configuration file without needing to simulate it first
+- [ENHANCEMENT] initialize microscopic partial time step to 0 when creating new microscopic molecule from mesoscopic regime
+- [FIX] corrected indirect entry of microscopic molecules into mesoscopic regime by using molecule's current partial time step (if applicable) instead of the global microscopic time step. This is more accurate for molecules that were just created within current time step
+- [FIX] corrected what diffusion coefficient is used when new microscopic molecule enters from mesoscopic regime
+- [UPDATE] added basic plotting instructions to README
+
+Changes introduced in AcCoRD v0.6 (public beta, 2016-05-30)
+- [NEW] added bimolecular chemical reactions in the microscopic regime. Current implementation is preliminary and requires user to provide the binding radius. An unbinding radius can also be provided. Potential reactants are compared with other potential reactants in same region and neighboring regions where the reaction could also take place. A molecule cannot participate in more than one bimolecular reaction per time step. Reaction site is found based on relative diffusion of reactants and must be a valid straight line destination for both both reactants. If there is an unbinding radius, trajectory of product molecules is also verified. If 2 products, then they are placed along line between the 2 reactant locations. If more than 2, then each is placed in a random direction. Some implementation concepts derived from Andrews and Bray, "Stochastic simulation of chemical reactions with spatial resolution and single molecule detail", Physical Biology, vol. 1, no. 3-4, pp. 137--151, 2004
+- [NEW] added Matlab functions for visualization. Any subset of the simulation environment can be plotted with very flexible display options. If any passive actors record molecule positions, then figures can be created as snapshots of a simulation or a video can be generated.
+- [NEW] added active point sources as a distinct shape. Can be placed in microscopic or mesoscopic regions, but cannot be on the boundary of 2 or more regions or 2 or more mesoscopic subvolumes. Point shape implementation is sufficient to just handle point active actors
+- [NEW] added option for user to define a constant active actor bit sequence
+- [ENHANCEMENT] updated random number generation to use the PCG (permuted congruential generator) family and replacing the Mersenne twister. Generator is faster and has better statistical quality than the Mersenne twister. More about this generator can be found at www.pcg-random.org. Calls to basic PCG functions are centralized in a single source file for all random number generation
+- [ENHANCEMENT] improved transitions between microscopic and mesoscopic regimes. User can choose between 2 transition algorithms which vary how a molecule is placed from the mesoscopic regime to the microscopic regime (one for small time step / large subvolume and the other for large time step / small subvolume). Algorithms are based on those presented in Flegg et al., "Analysis of the two-regime method on square meshes", SIAM Journal of Scientific Computing, vol. 36, no. 3, pp. 561--588, 2014
+- [ENHANCEMENT] user can define maximum distance beyond which a micro to mesoscopic substep transition will not be considered. Otherwise, molecules in microscopic regions can probablistically enter mesoscopic regime even if molecule is still in microscopic regime at end of diffusion step. Also, molecules must end up in a region that neighbors a mesoscopic region in order for a substep transition to be considered
+- [ENHANCEMENT] improved how simulation configuration file is imported into Matlab. The default JSON-formatted structure is converted into a custom structure with more consistent indexing and simpler field names.
+- [ENHANCEMENT] added active actor data sequence as a user option
+- [ENHANCEMENT] changed format of output filename to match output filename instead of the original configuration file
+- [FIX] corrected molecule reflection off of a child region surface
+- [FIX] corrected checks for surface reactions when a surface has no potential reactions defined (in which case many chemical reaction indicators are never allocated/initialized)
+- [FIX] added warnings for unnecessary active actor parameters depending on values of other active actor parameters
+- [FIX] added check for positive radii for spherical regions and actors
+- [UPDATE] new configuration files added to demonstrate improved hybrid transitions (accord_config_sample_hybrid.txt) and microscopic bimolecular reactions (accord_config_sample_crowding.txt)
+- [UPDATE] added scripts to run all sample configuration files
+
+Changes introduced in v0.5.1 (public beta, 2016-05-06)
+- [NEW] chemical reactions have labels
+- [NEW] chemical reactions can be defined as reversible, where the coupled reaction is specified. The reaction probabilities of coupled surface reactions are determined differently from those that are uncoupled
+- [NEW] added "Desorbing" as a distinct surface reaction type. It is generally the reverse of "Absorbing"
+- [NEW] algorithms for calculating surface reaction probabilities (adsorption, desorption, and membrane transition) can be specified by the user. This implementation is based on the options presented in S.S. Andrews, "Accurate particle-based simulation of adsorption, desorption and partial transmission" Physical Biology, vol. 6, p.046015, 2009. These surface reactions can have "Normal", "Mixed", or "Steady State" reaction probabilities, where the steady state calculation depends on whether reaction is reversible.
+- [NEW] user can specify whether products of surface reactions are released from the surface. Not needed for membrane reactions, where the product is always released from the surface.
+- [ENHANCEMENT] improved transitions to and from surface regions, whether via adsorption, desorption, or membrane transitions
+- [ENHANCEMENT] constrain number of "special" surface reactions to one per class per molecule type per region. An inner or outer surface can only have 1 desorbing and 1 adsorbing reaction per molecule type. A membrance surface can only have 1 inner membrane and 1 outer membrane reaction per molecule type. These limits facilitate calculation of transition probabilities and determining whether a given molecule is able to react with a surface.
+- [ENHANCEMENT] the product of a membrane reaction is assumed to be the same as its reactant. Any specified products are ignored.
+- [FIX] corrected how molecules are locked to the boundary of a new region when they diffuse from one region to another
+- [FIX] re-organized execution of 1st order microscopic reactions to account for release of products from microscopic surfaces. Also, more code is recycled (when considering desorption vs normal reactions, and recent vs "old" molecules)
+- [FIX] corrected how molecules can be placed when they are created at a surface by a 0th order chemical reaction
+- [FIX] updated point reflection to accommodate rectangle surface regions
+- [FIX] fixed bug where all 1st order reactions for a given molecule type were assumed to be absorbing reactions if any one of them were absorbing
+
+Changes introduced in v0.5 (public beta, 2016-04-15)
+- [NEW] added surface regions, which can be defined on the border(s) of normal regions. Surface regions can be used to control transitions between regions, or to be chemical reaction sites. Surface regions and the "Normal" regions that they touch must currently be defined as microscopic (and not mesoscopic).
+- [NEW] added some surface chemical reactions, including properties to declare whether a given reaction occurs at a surface. "Membrane" surfaces should have a reaction that defines whether a molecule crosses the membrane or is reflected
+- [NEW] added normal 2D regions. Implementation is at alpha stage. "Normal" 2D regions cannot be neighbors of normal 3D regions
+- [NEW] an actor's location can be defined as the union of a set of regions. It is still possible to define an actor by an explicit shape.
+- [NEW] added display of initialization start time (this is in addition to the start of the actual simulation)
+- [ENHANCEMENT] improved how a passive actor observes molecules in a region if the entire region is known to be inside the actor. In such a case, all molecules inside the region are automatically assumed to be inside the actor, without explicit coordinate checks
+- [ENHANCEMENT] removed hard-coded limits on the number of molecule types and the number of reaction products
+- [ENHANCEMENT] adjusted the clearance distance between spherical and rectangular regions, when one is nested inside the other, so that the distance is scaled by the subvolume adjacency error
+- [ENHANCEMENT] added more checks on region parameters to verify the validity of a configuration file. This includes a check on using unique region labels
+- [ENHANCEMENT] region configuration errors will include the region's label string for easier identification
+- [ENHANCEMENT] delayed program exit due to region configuration errors until all region checks have been completed, so that the user can address all errors at once instead of seeing them one-by-one
+- [ENHANCEMENT] tidied up initialization of region array to nest more code in subfunctions
+- [ENHANCEMENT] tidied up calculations of subvolume coordinates
+- [ENHANCEMENT] error messages about shapes will print the actual name of the shape
+- [ENHANCEMENT] removed the number of dimensions as a configuration parameter
+- [FIX] corrected how molecules get "locked" to the surface of a spherical region when transitioning to or from a spherical region. Previous algorithm could lock a molecule to an imaginary point
+- [FIX] corrected the distance to the end point when a microscopic molecule diffuses from one region to another
+- [FIX] corrected memory allocation for the subvolume helper arrays
+- [FIX] added fail check for when a microscopic molecule is "pushed" from one region into one of its neighbors, in case molecule ends up in no actual region. If this occurs, an error message is displayed, the molecule is returned to its starting point, and the simulation continues. There are currently no known cases where this error would occur.
+- [FIX] corrected reflection off a surface boundary in microscopic molecule diffusion validation, such that reflection is off the right surface
+- [FIX] corrected display of simulation end time
+
+Changes introduced in v0.4.1.1
+- [FIX] corrected build scripts to create the bin subdirectory if it doesn't exist.
+- [UPDATE] Minor updates to README to reflect new installation and usage
+
+Changes introduced in v0.4.1
+- [ENHANCEMENT] removed binaries from source code.
+- [ENHANCEMENT] relaxed placement of executable file relative to configuration file. See README.txt for details.
+- [ENHANCEMENT] improved console output with initialization details and better error messages.
+
+Changes introduced in v0.4:
+- [NEW] added spherical regions and actors. Spherical regions must be microscopic and are always composed of a single subvolume. Spherical regions can have cartesian parent or child regions, but there must be a clearance of at least the cartesian subvolume size to the boundary of the cartesian region. The surface of spherical actors must not intersect any cartesian region boundaries or any mesoscopic subvolumes.
+- [NEW] added option to restrict chemical reactions to specific regions.
+- [NEW] added more sample configuration files for common usage and stress testing.
+- [ENHANCEMENT] improved validation of molecule diffusion in microscopic regions to track molecule trajectory from initial location. This accommodates reflections and multiple region boundary transitions as necessary. Trajectory intersections are determined algebraically, and care is taken to avoid numerical problems. Special cases include a region that shares a boundary with its parent, and molecules that are very close to a boundary before or after they diffuse.
+- [ENHANCEMENT] changed data types of large integers to extended integer types uint32_t and uint64_t. This makes performance more consistent across OSs (for example, unsigned long is 32bits on Win but 64bits on Ubuntu)
+- [ENHANCEMENT] simplified overlap test between actors and subvolumes when a region is known to be entirely inside an actor, or if an actor is inside just one region.
+- [ENHANCEMENT] simplified code for updating subvolume reaction propensities. Actual execution is a bit more computationally complex, particularly for reactions with just a single molecule, but now with much less code and also avoids numerical underflow issues
+- [FIX] corrected the detection of a rectangular child region being outside of its rectangular parent.
+- [FIX] corrected counting of molecules to include those that are on the actor boundary.
+- [FIX] corrected diffusion rates out of mesoscopic subvolumes. Overall, rates were off by a factor of 2.
+- [FIX] corrected diffusion rate from a mesoscopic subvolume to a microscopic neighbor so that it is only a function of the size of the mesoscopic subvolume and the size of the overlap to the neighbor (but independent of the size of the neighbor).
+- [FIX] corrected meso-to-micro transition when a mesoscopic subvolume borders the same microscopic region along more than one face (i.e., when the microscopic region is a parent).
+- [FIX] corrected molecule placement in microscopic regions to account for nested regions.
+- [FIX] corrected reaction rate calculation for 0th order reactions to properly account for a region's effective volume (i.e., minus that of nested regions).
+- [FIX] corrected generation of output molecules due to 0th order reactions.
+- [FIX] corrected calculation for the number of heap levels, as used when determining the sequence of mesoscopic reactions and the sequence of actor/region behavior.
+- [FIX] corrected bug where molecules leaving mesoscopic regime to enter microscopic regime were always simultaneously turned into the first molecule type.
+- [UPDATE] Removed deprecated debug functions (using gdb as a debugger is much more powerful).
+- [UPDATE] Updated comments in randistrs.c and LICENSE file to indicate changes made for AcCoRD.
+
+Changes introduced in v0.3.1.1 (2016-01-06)
+- [FIX] corrected how the volume of a region is calculated so that empty regions return 0
+- [FIX] corrected message that appears when there are warnings from loading the configuration file
+- [UPDATE] updated HOWTO_DEFINE_CONFIG.txt to say that child regions must be fully defined within their parent
+
+Changes introduced in v0.3.1 (2015-12-28)
+- [NEW] populated license file with BSD Simplified license for AcCoRD source and the corresponding copyright information for third-party source code.
+- [ENHANCEMENT] updated loading of configuration files to catch missing parameters and incorrect formats. Some major omissions will result in an error that closes the simulation, but many incorrect inputs produce a warning and lead to a default value. Any warning will trigger user input to continue simulation, unless a parameter to override is defined.
+- [FIX] added outputs to fread and scanf calls to avoid warnings when compiling optimized version.
+- [UPDATE] cleaned up JSONlab files for loading JSON into Matlab. Kept minimal files and moved them to dedicated sub-subdirectory
+
+Changes introduced in v0.3 (2015-09-04)
+- [NEW] environments now 3D instead of 2D
+- [NEW] added ability to nest regions within each other by identifying a region's parent region. This enables much easier creation of environments where there is a micro region surrouded by meso regions, or vice versa.
+- [ENHANCEMENT] improved calculation of overlap between adjacent mesoscopic subvolumes so they can now be shifted by any amount and the diffusion rates between them will be correct.
+- [FIX] corrected bug in determining the maximum number of neighbors that a subvolume will have. Counting of neighbors is now done manually without any estimating
+
+Changes introduced in v0.2 (2015-08-12):
+- [ENHANCEMENT] re-structured simulation output from 1 JSON file to 2 files (one summary in JSON, one in formatted ASCII). This change made to reduce import times when loading into MATLAB.
+- [ENHANCEMENT] modified how input filenames are read and how output files are named to facilitate running simulations with many seed values
+- [ENHANCEMENT] re-wrote MATLAB importing code to accommodate changes in output filenames and format, including the ability to merge results from simulations that used different seed values.
+- [FIX] corrected bugs in how the mesoscopic model simulates chemical reactions
+- [FIX] corrected bug in how cumulative fraction of actor in a subvolume was calculated, where molecules being placed in the 2nd region or later were very likely to be placed in that region's first subvolume

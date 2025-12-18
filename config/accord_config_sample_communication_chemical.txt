@@ -1,0 +1,159 @@
+{
+	"Notes": "Notes fields replace commenting, which is not standard in JSON.",
+	"Description": "This configuration consider a simple communications scenario where both
+		the transmitter and receiver have chemical processes.
+		This configuration was arranged to demonstrate the following functionality:
+		- CSK transmission with more than one bit per symbol
+		- transmission of modulated signal over finite interval with molecules randomly generated.
+		- reversible chemical conversion at the receiver surface		
+		One repeat of this simulation should take less than a minute to execute on a personal computer.
+		The differences in run time compared to the non-chemical version of this simulation are due
+		to the definition of 2 regions and not the chemical reactions themselves. A second region is
+		required here in order to define where the receiver chemical reactions take place. Most
+		computational resources are spent on determining whether the molecules have transitioned
+		between the two regions.",
+	"Output Filename": "accord_sample_communication_chemical",
+	"Warning Override": false,
+	"Simulation Control": {
+		"Number of Repeats": 1,
+		"Final Simulation Time": 0.1,
+		"Global Microscopic Time Step": 1e-4,
+		"Random Number Seed": 1,
+		"Max Number of Progress Updates": 100
+	},
+	"Chemical Properties": {
+		"Number of Molecule Types": 2,
+		"Diffusion Coefficients": [1e-9, 0],
+		"Global Flow Type": "None",
+		"Chemical Reaction Specification": [
+			{							
+				"Notes": "Conversion. Can only occur at the receiver.",
+				"Label": "Conversion",
+				"Is Reaction Reversible?": true,
+				"Reverse Reaction Label": "Reverse",
+				"Surface Reaction?": true,
+				"Surface Reaction Type": "Absorbing",
+				"Surface Transition Probability": "Steady State",
+				"Default Everywhere?": false,
+				"Exception Regions": ["Receiver"],
+				"Reactants": [1, 0],
+				"Products": [0, 1],
+				"Products Released?": [false, false],
+				"Reaction Rate": 40
+			},
+			{							
+				"Notes": "Reverse reaction. Can only occur at the receiver.",
+				"Label": "Reverse",
+				"Is Reaction Reversible?": true,
+				"Reverse Reaction Label": "Conversion",
+				"Surface Reaction?": true,
+				"Surface Reaction Type": "Desorbing",
+				"Surface Transition Probability": "Steady State",
+				"Default Everywhere?": false,
+				"Exception Regions": ["Receiver"],
+				"Reactants": [0, 1],
+				"Products": [1, 0],
+				"Products Released?": [true, false],
+				"Release Placement Type": "Steady State Diffusion",
+				"Reaction Rate": 200
+			}
+		]
+	},
+	"Environment":	{
+		"Subvolume Base Size": 1e-12,
+		"Region Specification": [
+			{
+				"Notes": "Single spherical region with infinite radius. If any other region were
+					added here then it should be defined as a child of this region.",
+				"Label": "A",
+				"Parent Label": "",
+				"Shape": "Sphere",
+				"Type": "Normal",
+				"Anchor Coordinate": [0, 0, 0],
+				"Radius": 1e9999
+			},
+			{
+				"Notes": "Region at receiver defined so that it can have a local chemical reaction.
+				Its location must match that of receiver.",
+				"Label": "Receiver",
+				"Parent Label": "A",
+				"Shape": "Sphere",
+				"Type": "3D Surface",
+				"Surface Type": "Outer",
+				"Anchor Coordinate": [0, 2e-6, 0],
+				"Radius": 0.5e-6
+			}
+		],
+		"Actor Specification": [
+		{
+				"Notes": "Point Transmitter at origin with 10ms symbol length. Molecules are
+					generated at random times at an expected rate that depends on the current symbol.",
+				"Is Location Defined by Regions?": false,
+				"Shape": "Point",
+				"Outer Boundary": [0, 0, 0],
+				"Is Actor Active?": true,
+				"Start Time": 0,
+				"Is There Max Number of Actions?": false,
+				"Is Actor Independent?": true,
+				"Action Interval": 10e-3,
+				"Is Actor Activity Recorded?": true,
+				"Random Number of Molecules?": true,
+				"Random Molecule Release Times?": true,
+				"Release Interval": 1e-3,
+				"Bits Random?": true,
+				"Probability of Bit 1": 0.5,
+				"Modulation Scheme": "CSK",
+				"Modulation Bits": 2,
+				"Modulation Strength": 120000,
+				"Is Molecule Type Released?": [true, false]
+		},
+		{
+				"Notes": "Observer at molecule source. Demonstrates that molecules quickly
+					leave the source. Observations here are much lower than in the
+					non-chemical version of this simulation because molecules get created
+					at any time and are able to diffuse away between observations",
+				"Is Location Defined by Regions?": false,
+				"Shape": "Sphere",
+				"Outer Boundary": [0, 0, 0, 1e-7],
+				"Is Actor Active?": false,
+				"Start Time": 1e-10,
+				"Is There Max Number of Actions?": false,
+				"Is Actor Independent?": true,
+				"Action Interval": 1e-4,
+				"Is Actor Activity Recorded?": true,
+				"Is Time Recorded with Activity?": false,
+				"Is Molecule Type Observed?": [true, false],
+				"Is Molecule Position Observed?": [false, false]
+		},
+		{
+				"Notes": "Spherical observer at receiver",
+				"Is Location Defined by Regions?": true,
+				"List of Regions Defining Location": ["Receiver"],
+				"Is Actor Active?": false,
+				"Start Time": 1e-10,
+				"Is There Max Number of Actions?": false,
+				"Is Actor Independent?": true,
+				"Action Interval": 1e-4,
+				"Is Actor Activity Recorded?": true,
+				"Is Time Recorded with Activity?": false,
+				"Is Molecule Type Observed?": [false, true],
+				"Is Molecule Position Observed?": [false, false]
+		},
+		{
+				"Notes": "Global observer.",
+				"Is Location Defined by Regions?": false,
+				"Shape": "Sphere",
+				"Outer Boundary": [0, 0, 0, 1e9999],
+				"Is Actor Active?": false,
+				"Start Time": 1e-10,
+				"Is There Max Number of Actions?": false,
+				"Is Actor Independent?": true,
+				"Action Interval": 1e-4,
+				"Is Actor Activity Recorded?": true,
+				"Is Time Recorded with Activity?": false,
+				"Is Molecule Type Observed?": [true, false],
+				"Is Molecule Position Observed?": [false, false]
+		}
+		]		
+	}
+}
