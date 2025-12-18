@@ -111,6 +111,10 @@
 
 #include "micro_molecule.h"
 
+bool gSoaSimpleEnabled = false;
+MicroMoleculePool* gSoaSimplePool = NULL;
+ListMol3D* gSoaSimpleList = NULL;
+
 // Local Function Prototypes
 
 static void traverse(const ListMol3D * p_list, void (* p_fun)(ItemMol3D item));
@@ -129,12 +133,170 @@ static void copyToNode(ItemMol3D item, NodeMol3D * p_node);
 
 static void copyToNodeRecent(ItemMolRecent3D item, NodeMolRecent3D * p_node);
 
+static void listToPoolSimple(ListMol3D list, MicroMoleculePool* pool)
+{
+	NodeMol3D* node;
+	if(pool == NULL)
+		return;
+	pool->count = 0;
+	node = list;
+	while(node != NULL)
+	{
+		pool_add_molecule(pool,
+			node->item.x,
+			node->item.y,
+			node->item.z,
+			true);
+		node = node->next;
+	}
+}
+
+static void poolToListSimple(MicroMoleculePool* pool, ListMol3D list)
+{
+	NodeMol3D* node;
+	size_t i;
+	if(pool == NULL)
+		return;
+	node = list;
+	i = 0;
+	while(node != NULL && i < pool->count)
+	{
+		node->item.x = pool->x[i];
+		node->item.y = pool->y[i];
+		node->item.z = pool->z[i];
+		i++;
+		node = node->next;
+	}
+}
+
+static void diffuseMolecules_pool_simple(const short NUM_REGIONS,
+	const unsigned short NUM_MOL_TYPES,
+	MicroMoleculePool* pool,
+	short curRegion,
+	unsigned short curType,
+	const struct region regionArray[],
+	struct mesoSubvolume3D mesoSubArray[],
+	double sigma[NUM_REGIONS][NUM_MOL_TYPES],
+	const struct chem_rxn_struct chem_rxn[],
+	const double HYBRID_DIST_MAX,
+	double DIFF_COEF[NUM_REGIONS][NUM_MOL_TYPES])
+{
+	size_t i;
+	double oldPoint[3];
+	double newPoint[3];
+	bool bPointChange;
+	bool bReaction;
+	bool bApmcCur;
+	bool bValidDiffusion;
+	short newRegion;
+	short transRegion;
+	unsigned short curRxn;
+
+	(void)NUM_MOL_TYPES;
+	(void)mesoSubArray;
+	(void)HYBRID_DIST_MAX;
+
+	if(pool == NULL)
+		return;
+	if(pool->count == 0)
+		return;
+	if(!regionArray[curRegion].bDiffuse[curType]
+		&& !regionArray[curRegion].spec.bFlow[curType])
+		return;
+
+	for(i = 0; i < pool->count; i++)
+		pool->bNeedUpdate[i] = true;
+
+	for(i = 0; i < pool->count; i++)
+	{
+		if(!pool->bNeedUpdate[i])
+			continue;
+		pool->bNeedUpdate[i] = false;
+
+		oldPoint[0] = pool->x[i];
+		oldPoint[1] = pool->y[i];
+		oldPoint[2] = pool->z[i];
+
+		newPoint[0] = oldPoint[0];
+		newPoint[1] = oldPoint[1];
+		newPoint[2] = oldPoint[2];
+
+		if(regionArray[curRegion].bDiffuse[curType])
+		{
+			newPoint[0] = generateNormal(newPoint[0],
+				sigma[curRegion][curType]);
+			newPoint[1] = generateNormal(newPoint[1],
+				sigma[curRegion][curType]);
+			newPoint[2] = generateNormal(newPoint[2],
+				sigma[curRegion][curType]);
+		}
+		if(regionArray[curRegion].spec.bFlow[curType])
+		{
+			switch(regionArray[curRegion].spec.flowType[curType])
+			{
+				case FLOW_UNIFORM:
+					newPoint[0] += regionArray[curRegion].flowConstant[curType][0];
+					newPoint[1] += regionArray[curRegion].flowConstant[curType][1];
+					newPoint[2] += regionArray[curRegion].flowConstant[curType][2];
+					break;
+			}
+		}
+
+		bPointChange = false;
+		bReaction = false;
+		bApmcCur = false;
+		newRegion = curRegion;
+		transRegion = curRegion;
+		curRxn = 0;
+
+		bValidDiffusion = validateMolecule(newPoint,
+			oldPoint,
+			NUM_REGIONS,
+			NUM_MOL_TYPES,
+			curRegion,
+			&newRegion,
+			&transRegion,
+			&bPointChange,
+			regionArray,
+			curType,
+			&bReaction,
+			&bApmcCur,
+			false,
+			regionArray[curRegion].spec.dt,
+			chem_rxn,
+			DIFF_COEF,
+			&curRxn);
+
+		if(!bValidDiffusion)
+		{
+			pool->x[i] = oldPoint[0];
+			pool->y[i] = oldPoint[1];
+			pool->z[i] = oldPoint[2];
+			continue;
+		}
+
+		if(newRegion != curRegion || !regionArray[newRegion].spec.bMicro)
+		{
+			fprintf(stderr, "ERROR: SoA simple path encountered region transition.\n");
+			exit(EXIT_FAILURE);
+		}
+
+		pool->x[i] = newPoint[0];
+		pool->y[i] = newPoint[1];
+		pool->z[i] = newPoint[2];
+	}
+}
+
 // Specific Definitions
 
-// Create new molecule at specified coordinates
 bool addMolecule(ListMol3D * p_list, double x, double y, double z)
 {
 	ItemMol3D new_molecule = {x,y,z, true};
+	if(gSoaSimpleEnabled && gSoaSimplePool != NULL && gSoaSimpleList != NULL && p_list == gSoaSimpleList)
+	{
+		pool_add_molecule(gSoaSimplePool, x, y, z, true);
+		return true;
+	}
 	return addItem(new_molecule, p_list);
 }
 
@@ -189,32 +351,54 @@ void diffuseMolecules(const short NUM_REGIONS,
 
 	bool bRemove, bValidDiffusion;
 	uint32_t minSub;
+	bool bSoaSimpleGlobal;
 	
 	// A Priori surface reaction parameters
 	bool bApmc; // Is there an A Priori surface reaction that we need to consider?
 	bool bApmcCur; // Did current molecule have (or attempt) an A Priori surface reaction?
 	unsigned short curGlobalRxn;
+
+	bSoaSimpleGlobal = false;
+	if(gSoaSimpleEnabled
+		&& NUM_REGIONS == 1
+		&& NUM_MOL_TYPES == 1)
+	{
+		curRegion = 0;
+		curType = 0;
+		if(regionArray[curRegion].spec.bMicro
+			&& regionArray[curRegion].numChemRxn == 0
+			&& !regionArray[curRegion].bHasMesoNeigh
+			&& HYBRID_DIST_MAX <= 0.0
+			&& regionArray[curRegion].molPool != NULL
+			&& regionArray[curRegion].spec.surfaceType == NO_SURFACE
+			&& regionArray[curRegion].numApmcRxn[curType] == 0)
+		{
+			bSoaSimpleGlobal = true;
+		}
+	}
 	
 	// Indicate that every microscopic molecule in a "normal" list
 	// needs to be moved.
 	// We do this to avoid moving a molecule more than once if it is moved
 	// to a different region.
-	for(curRegion = 0; curRegion < NUM_REGIONS; curRegion++)
+	if(!bSoaSimpleGlobal)
 	{
-		for(curType = 0; curType < NUM_MOL_TYPES; curType++)
+		for(curRegion = 0; curRegion < NUM_REGIONS; curRegion++)
 		{
-			if(isListMol3DEmpty(&p_list[curRegion][curType])
-				|| (!regionArray[curRegion].bDiffuse[curType]
-				&& !regionArray[curRegion].spec.bFlow[curType]))
-				continue; // No need to validate an empty list of molecules
-						  // or molecules that cannot move
-			
-			curNode = p_list[curRegion][curType];
-			
-			while(curNode != NULL)
+			for(curType = 0; curType < NUM_MOL_TYPES; curType++)
 			{
-				curNode->item.bNeedUpdate = true;
-				curNode = curNode->next;
+				if(isListMol3DEmpty(&p_list[curRegion][curType])
+					|| (!regionArray[curRegion].bDiffuse[curType]
+					&& !regionArray[curRegion].spec.bFlow[curType]))
+					continue;
+
+				curNode = p_list[curRegion][curType];
+
+				while(curNode != NULL)
+				{
+					curNode->item.bNeedUpdate = true;
+					curNode = curNode->next;
+				}
 			}
 		}
 	}
@@ -224,11 +408,22 @@ void diffuseMolecules(const short NUM_REGIONS,
 	{
 		for(curType = 0; curType < NUM_MOL_TYPES; curType++)
 		{
+			if(bSoaSimpleGlobal
+				&& curRegion == 0
+				&& curType == 0)
+			{
+				MicroMoleculePool* pool;
+				pool = regionArray[curRegion].molPool;
+				diffuseMolecules_pool_simple(NUM_REGIONS, NUM_MOL_TYPES,
+					pool, curRegion, curType, regionArray, mesoSubArray,
+					sigma, chem_rxn, HYBRID_DIST_MAX, DIFF_COEF);
+				continue;
+			}
+			
 			if(isListMol3DEmpty(&p_list[curRegion][curType])
 				|| (!regionArray[curRegion].bDiffuse[curType]
 				&& !regionArray[curRegion].spec.bFlow[curType]))
-				continue; // No need to validate an empty list of molecules
-						  // or molecules that cannot move
+				continue;
 			
 			curNode = p_list[curRegion][curType];
 			prevNode = NULL;
@@ -603,6 +798,54 @@ void diffuseOneMolecule(ItemMol3D * molecule, double sigma)
 	molecule->x = generateNormal(molecule->x, sigma);
 	molecule->y = generateNormal(molecule->y, sigma);
 	molecule->z = generateNormal(molecule->z, sigma);
+}
+
+void diffuseMolecules_pool(MicroMoleculePool* pool,
+	const struct region* region,
+	unsigned short molType,
+	double sigma)
+{
+	size_t i;
+	if(pool == NULL)
+		return;
+	if(pool->count == 0)
+		return;
+	if(!region->bDiffuse[molType] && !region->spec.bFlow[molType])
+		return;
+	for(i = 0; i < pool->count; i++)
+		pool->bNeedUpdate[i] = true;
+	for(i = 0; i < pool->count; i++)
+	{
+		double x;
+		double y;
+		double z;
+		if(!pool->bNeedUpdate[i])
+			continue;
+		pool->bNeedUpdate[i] = false;
+		x = pool->x[i];
+		y = pool->y[i];
+		z = pool->z[i];
+		if(region->bDiffuse[molType])
+		{
+			x = generateNormal(x, sigma);
+			y = generateNormal(y, sigma);
+			z = generateNormal(z, sigma);
+		}
+		if(region->spec.bFlow[molType])
+		{
+			switch(region->spec.flowType[molType])
+			{
+				case FLOW_UNIFORM:
+					x += region->flowConstant[molType][0];
+					y += region->flowConstant[molType][1];
+					z += region->flowConstant[molType][2];
+					break;
+			}
+		}
+		pool->x[i] = x;
+		pool->y[i] = y;
+		pool->z[i] = z;
+	}
 }
 
 // Move one molecule according to a flow vector
@@ -2550,6 +2793,58 @@ bool isMoleculeObservedRecent(ItemMolRecent3D * molecule, int obsType, double bo
 		default:
 			return false;
 	}
+}
+
+uint64_t countMoleculesPool(MicroMoleculePool* pool,
+	int obsType,
+	double boundary[])
+{
+	ItemMol3D item;
+	uint64_t curCount = 0ULL;
+	size_t i;
+	if(pool == NULL)
+		return 0ULL;
+	for(i = 0; i < pool->count; i++)
+	{
+		item.x = pool->x[i];
+		item.y = pool->y[i];
+		item.z = pool->z[i];
+		item.bNeedUpdate = true;
+		if(isMoleculeObserved(&item, obsType, boundary))
+			curCount++;
+	}
+	return curCount;
+}
+
+uint64_t recordMoleculesPool(MicroMoleculePool* pool,
+	ListMol3D * recordList,
+	int obsType,
+	double boundary[],
+	bool bRecordPos,
+	bool bRecordAll)
+{
+	ItemMol3D item;
+	uint64_t curCount = 0ULL;
+	size_t i;
+	if(pool == NULL)
+		return 0ULL;
+	for(i = 0; i < pool->count; i++)
+	{
+		item.x = pool->x[i];
+		item.y = pool->y[i];
+		item.z = pool->z[i];
+		item.bNeedUpdate = true;
+		if(bRecordAll || isMoleculeObserved(&item, obsType, boundary))
+		{
+			curCount++;
+			if(bRecordPos && !addItem(item, recordList))
+			{
+				fprintf(stderr,"\nERROR: Memory allocation for recording molecule positions.\n");
+				exit(EXIT_FAILURE);
+			}
+		}
+	}
+	return curCount;
 }
 
 // General Definitions

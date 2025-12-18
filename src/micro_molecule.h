@@ -140,10 +140,22 @@ struct molecule_recent_list3D {
 	double dt_partial; // Time between molecule creation and next micro time step
 };
 
+// --- New Data-Oriented Design (SoA) Structure ---
+// Replaces struct molecule_list3D and node3D for better cache locality and SIMD support
+struct MicroMoleculePool {
+	double* x;
+	double* y;
+	double* z;
+	bool* bNeedUpdate;
+	size_t count;
+	size_t capacity;
+};
+
 // General type declarations
 
 typedef struct molecule_list3D ItemMol3D;
 typedef struct molecule_recent_list3D ItemMolRecent3D;
+typedef struct MicroMoleculePool MicroMoleculePool; // Forward declaration
 
 typedef struct node3D{
 	ItemMol3D item;
@@ -160,6 +172,10 @@ typedef NodeMolRecent3D * ListMolRecent3D;
 
 // micro_molecule specific Prototypes
 
+extern bool gSoaSimpleEnabled;
+extern MicroMoleculePool* gSoaSimplePool;
+extern ListMol3D* gSoaSimpleList;
+
 bool addMolecule(ListMol3D * p_list, double x, double y, double z);
 
 bool addMoleculeRecent(ListMolRecent3D * p_list, double x, double y, double z, double dt_partial);
@@ -167,6 +183,84 @@ bool addMoleculeRecent(ListMolRecent3D * p_list, double x, double y, double z, d
 void moveMolecule(ItemMol3D * molecule, double x, double y, double z);
 
 void moveMoleculeRecent(ItemMolRecent3D * molecule, double x, double y, double z);
+
+static inline void pool_init(MicroMoleculePool* pool, size_t initial_capacity)
+{
+	if(initial_capacity < 1)
+		initial_capacity = 1;
+	pool->count = 0;
+	pool->capacity = initial_capacity;
+	pool->x = (double*)malloc(initial_capacity * sizeof(double));
+	pool->y = (double*)malloc(initial_capacity * sizeof(double));
+	pool->z = (double*)malloc(initial_capacity * sizeof(double));
+	pool->bNeedUpdate = (bool*)malloc(initial_capacity * sizeof(bool));
+	if(!pool->x || !pool->y || !pool->z || !pool->bNeedUpdate)
+	{
+		fprintf(stderr, "Error: Memory allocation failed for molecule pool initialization.\n");
+		exit(EXIT_FAILURE);
+	}
+}
+
+static inline void pool_add_molecule(MicroMoleculePool* pool, double x, double y, double z, bool bNeedUpdate)
+{
+	if(pool->count >= pool->capacity)
+	{
+		size_t new_capacity = pool->capacity * 2;
+		double* new_x = (double*)realloc(pool->x, new_capacity * sizeof(double));
+		double* new_y = (double*)realloc(pool->y, new_capacity * sizeof(double));
+		double* new_z = (double*)realloc(pool->z, new_capacity * sizeof(double));
+		bool* new_bNeedUpdate = (bool*)realloc(pool->bNeedUpdate, new_capacity * sizeof(bool));
+		if(!new_x || !new_y || !new_z || !new_bNeedUpdate)
+		{
+			fprintf(stderr, "Error: Memory reallocation failed for molecule pool resizing.\n");
+			exit(EXIT_FAILURE);
+		}
+		pool->x = new_x;
+		pool->y = new_y;
+		pool->z = new_z;
+		pool->bNeedUpdate = new_bNeedUpdate;
+		pool->capacity = new_capacity;
+	}
+	size_t idx = pool->count;
+	pool->x[idx] = x;
+	pool->y[idx] = y;
+	pool->z[idx] = z;
+	pool->bNeedUpdate[idx] = bNeedUpdate;
+	pool->count++;
+}
+
+static inline void pool_remove_molecule(MicroMoleculePool* pool, size_t index)
+{
+	if(index >= pool->count)
+		return;
+	size_t last_idx = pool->count - 1;
+	if(index != last_idx)
+	{
+		pool->x[index] = pool->x[last_idx];
+		pool->y[index] = pool->y[last_idx];
+		pool->z[index] = pool->z[last_idx];
+		pool->bNeedUpdate[index] = pool->bNeedUpdate[last_idx];
+	}
+	pool->count--;
+}
+
+static inline void pool_free(MicroMoleculePool* pool)
+{
+	if(pool->x)
+		free(pool->x);
+	if(pool->y)
+		free(pool->y);
+	if(pool->z)
+		free(pool->z);
+	if(pool->bNeedUpdate)
+		free(pool->bNeedUpdate);
+	pool->x = NULL;
+	pool->y = NULL;
+	pool->z = NULL;
+	pool->bNeedUpdate = NULL;
+	pool->count = 0;
+	pool->capacity = 0;
+}
 
 void diffuseMolecules(const short NUM_REGIONS,
 	const unsigned short NUM_MOL_TYPES,
@@ -180,6 +274,11 @@ void diffuseMolecules(const short NUM_REGIONS,
 	double DIFF_COEF[NUM_REGIONS][NUM_MOL_TYPES]);
 
 void diffuseOneMolecule(ItemMol3D * molecule, double sigma);
+
+void diffuseMolecules_pool(MicroMoleculePool* pool,
+	const struct region* region,
+	unsigned short molType,
+	double sigma);
 
 // Move one molecule according to a flow vector
 void flowTransportOneMolecule(ItemMol3D * molecule,
@@ -327,7 +426,18 @@ uint64_t countMoleculesRecent(ListMolRecent3D * p_list,
 	int obsType,
 	double boundary[]);
 
+uint64_t countMoleculesPool(MicroMoleculePool* pool,
+	int obsType,
+	double boundary[]);
+
 uint64_t recordMolecules(ListMol3D * p_list,
+	ListMol3D * recordList,
+	int obsType,
+	double boundary[],
+	bool bRecordPos,
+	bool bRecordAll);
+
+uint64_t recordMoleculesPool(MicroMoleculePool* pool,
 	ListMol3D * recordList,
 	int obsType,
 	double boundary[],

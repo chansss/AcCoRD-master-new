@@ -95,6 +95,7 @@
 
 #include "chem_rxn.h" // For deleting chemical reaction region members
 #include "subvolume.h"
+#include "micro_molecule.h" // For MicroMoleculePool
 
 //
 // "Private" Declarations
@@ -301,6 +302,22 @@ void initializeRegionArray(struct region regionArray[],
 	// Define chemical reaction network
 	initializeRegionChemRxn(NUM_REGIONS, regionArray,
 		NUM_MOL_TYPES, MAX_RXNS, chem_rxn, DIFF_COEF);
+
+	// --- New Data-Oriented Design (SoA) Initialization ---
+	// Initialize MicroMoleculePool for microscopic regions
+	for(i = 0; i < NUM_REGIONS; i++)
+	{
+		if(subvol_spec[i].bMicro) {
+			regionArray[i].molPool = (struct MicroMoleculePool*)malloc(sizeof(struct MicroMoleculePool));
+			if(regionArray[i].molPool == NULL) {
+				fprintf(stderr, "ERROR: Memory allocation for region %u molecule pool.\n", i);
+				exit(EXIT_FAILURE);
+			}
+			pool_init(regionArray[i].molPool, 1000); // Initial capacity 1000
+		} else {
+			regionArray[i].molPool = NULL;
+		}
+	}
 }
 
 // Initialize region knowledge of the subvolumes that are adjacent to it
@@ -607,6 +624,13 @@ void delete_boundary_region_(const short NUM_REGIONS,
 		
 		if(regionArray[i].bDiffuse != NULL)
 			free(regionArray[i].bDiffuse);
+
+		if(regionArray[i].molPool != NULL)
+		{
+			pool_free(regionArray[i].molPool);
+			free(regionArray[i].molPool);
+			regionArray[i].molPool = NULL;
+		}
 	}
 }
 

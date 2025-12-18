@@ -254,6 +254,31 @@ int main(int argc, char *argv[])
 	initializeRegionArray(regionArray,	spec.subvol_spec, spec.NUM_REGIONS,
 		spec.NUM_MOL_TYPES,	spec.SUBVOL_BASE_SIZE, DIFF_COEF,
 		spec.MAX_RXNS, spec.chem_rxn);
+	gSoaSimpleEnabled = false;
+	gSoaSimplePool = NULL;
+	gSoaSimpleList = NULL;
+	{
+		const char* soaEnv = getenv("ACCORD_USE_SOA_SIMPLE");
+		if(soaEnv != NULL
+			&& spec.NUM_REGIONS == 1
+			&& spec.NUM_MOL_TYPES == 1)
+		{
+			short curRegion = 0;
+			unsigned short curType = 0;
+			if(regionArray[curRegion].spec.bMicro
+				&& regionArray[curRegion].numChemRxn == 0
+				&& !regionArray[curRegion].bHasMesoNeigh
+				&& spec.MAX_HYBRID_DIST <= 0.0
+				&& regionArray[curRegion].molPool != NULL
+				&& regionArray[curRegion].spec.surfaceType == NO_SURFACE
+				&& regionArray[curRegion].numApmcRxn[curType] == 0)
+			{
+				gSoaSimpleEnabled = true;
+				gSoaSimplePool = regionArray[curRegion].molPool;
+				gSoaSimpleList = &microMolList[curRegion][curType];
+			}
+		}
+	}
 	
 	
 	// Define subvolume array
@@ -615,11 +640,26 @@ int main(int argc, char *argv[])
 								actorCommonArray[heapTimer[0]].regionID[curRegionID];
 							if(regionArray[curRegion].spec.bMicro)
 							{	// Search through region's molecule list
-								actorPassiveArray[curPassive].curMolObs[curMolPassive] +=
-									recordMolecules(&microMolList[curRegion][curMolType], &molListPassive3D[curMolPassive], actorCommonArray[heapTimer[0]].regionInterType[curRegionID], actorCommonArray[heapTimer[0]].regionInterBound[curRegionID], bRecordPos,
-									actorCommonArray[heapTimer[0]].bRegionInside[curRegionID]) +
-									recordMoleculesRecent(&microMolListRecent[curRegion][curMolType], &molListPassive3D[curMolPassive], actorCommonArray[heapTimer[0]].regionInterType[curRegionID], actorCommonArray[heapTimer[0]].regionInterBound[curRegionID], bRecordPos,
-									actorCommonArray[heapTimer[0]].bRegionInside[curRegionID]);
+								if(gSoaSimpleEnabled
+									&& regionArray[curRegion].molPool != NULL
+									&& spec.NUM_REGIONS == 1
+									&& spec.NUM_MOL_TYPES == 1
+									&& curRegion == 0
+									&& curMolType == 0)
+								{
+									actorPassiveArray[curPassive].curMolObs[curMolPassive] +=
+										recordMoleculesPool(regionArray[curRegion].molPool, &molListPassive3D[curMolPassive], actorCommonArray[heapTimer[0]].regionInterType[curRegionID], actorCommonArray[heapTimer[0]].regionInterBound[curRegionID], bRecordPos,
+										actorCommonArray[heapTimer[0]].bRegionInside[curRegionID]) +
+										recordMoleculesRecent(&microMolListRecent[curRegion][curMolType], &molListPassive3D[curMolPassive], actorCommonArray[heapTimer[0]].regionInterType[curRegionID], actorCommonArray[heapTimer[0]].regionInterBound[curRegionID], bRecordPos,
+										actorCommonArray[heapTimer[0]].bRegionInside[curRegionID]);
+								} else
+								{
+									actorPassiveArray[curPassive].curMolObs[curMolPassive] +=
+										recordMolecules(&microMolList[curRegion][curMolType], &molListPassive3D[curMolPassive], actorCommonArray[heapTimer[0]].regionInterType[curRegionID], actorCommonArray[heapTimer[0]].regionInterBound[curRegionID], bRecordPos,
+										actorCommonArray[heapTimer[0]].bRegionInside[curRegionID]) +
+										recordMoleculesRecent(&microMolListRecent[curRegion][curMolType], &molListPassive3D[curMolPassive], actorCommonArray[heapTimer[0]].regionInterType[curRegionID], actorCommonArray[heapTimer[0]].regionInterBound[curRegionID], bRecordPos,
+										actorCommonArray[heapTimer[0]].bRegionInside[curRegionID]);
+								}
 							} else
 							{	// Search through subvolumes inside actor
 								for(curSubID = 0;

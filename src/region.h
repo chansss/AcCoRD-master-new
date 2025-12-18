@@ -182,6 +182,9 @@ struct spec_region3D { // Used to define a region of subvolumes
 	// Exclusion zones to more easily surround smaller regions
 };
 
+// Forward declaration to avoid circular dependency
+struct MicroMoleculePool;
+
 /* The region structure contains all parameters specific to a single
 * region, including the user-defined parameters defined in spec_region3D. The
 * structure members that describe the region's location relative to other regions
@@ -569,6 +572,11 @@ struct region { // Region boundary parameters
 	// Needed if the absorption has a finite reaction rate
 	// Length NUM_MOL_TYPES
 	double * apmcAlpha;
+
+	// --- New Data-Oriented Design (SoA) Member ---
+	// Pool of molecules in this region. 
+	// This will eventually replace the linked list in NodeMol3D*
+	struct MicroMoleculePool * molPool;
 };
 
 /*
