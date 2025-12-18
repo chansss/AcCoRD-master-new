@@ -259,23 +259,49 @@ int main(int argc, char *argv[])
 	gSoaSimpleList = NULL;
 	{
 		const char* soaEnv = getenv("ACCORD_USE_SOA_SIMPLE");
-		if(soaEnv != NULL
-			&& spec.NUM_REGIONS == 1
-			&& spec.NUM_MOL_TYPES == 1)
+		if(soaEnv != NULL)
 		{
-			short curRegion = 0;
-			unsigned short curType = 0;
-			if(regionArray[curRegion].spec.bMicro
-				&& regionArray[curRegion].numChemRxn == 0
-				&& !regionArray[curRegion].bHasMesoNeigh
-				&& spec.MAX_HYBRID_DIST <= 0.0
-				&& regionArray[curRegion].molPool != NULL
-				&& regionArray[curRegion].spec.surfaceType == NO_SURFACE
-				&& regionArray[curRegion].numApmcRxn[curType] == 0)
+			short soaRegion = -1;
+			unsigned short soaType = 0;
+			short curRegion;
+			unsigned short curType;
+			for(curRegion = 0; curRegion < spec.NUM_REGIONS; curRegion++)
+			{
+				if(!regionArray[curRegion].spec.bMicro)
+					continue;
+				if(regionArray[curRegion].numChemRxn != 0)
+					continue;
+				if(regionArray[curRegion].bHasMesoNeigh)
+					continue;
+				if(regionArray[curRegion].molPool == NULL)
+					continue;
+				if(regionArray[curRegion].spec.surfaceType != NO_SURFACE)
+					continue;
+				for(curType = 0; curType < spec.NUM_MOL_TYPES; curType++)
+				{
+					if(regionArray[curRegion].numApmcRxn[curType] != 0)
+						continue;
+					if(spec.MAX_HYBRID_DIST > 0.0)
+						continue;
+					if(soaRegion < 0)
+					{
+						soaRegion = curRegion;
+						soaType = curType;
+					}
+					else
+					{
+						soaRegion = -2;
+						break;
+					}
+				}
+				if(soaRegion == -2)
+					break;
+			}
+			if(soaRegion >= 0)
 			{
 				gSoaSimpleEnabled = true;
-				gSoaSimplePool = regionArray[curRegion].molPool;
-				gSoaSimpleList = &microMolList[curRegion][curType];
+				gSoaSimplePool = regionArray[soaRegion].molPool;
+				gSoaSimpleList = &microMolList[soaRegion][soaType];
 			}
 		}
 	}
@@ -642,17 +668,15 @@ int main(int argc, char *argv[])
 							{	// Search through region's molecule list
 								if(gSoaSimpleEnabled
 									&& regionArray[curRegion].molPool != NULL
-									&& spec.NUM_REGIONS == 1
-									&& spec.NUM_MOL_TYPES == 1
-									&& curRegion == 0
-									&& curMolType == 0)
+									&& &microMolList[curRegion][curMolType] == gSoaSimpleList)
 								{
 									actorPassiveArray[curPassive].curMolObs[curMolPassive] +=
 										recordMoleculesPool(regionArray[curRegion].molPool, &molListPassive3D[curMolPassive], actorCommonArray[heapTimer[0]].regionInterType[curRegionID], actorCommonArray[heapTimer[0]].regionInterBound[curRegionID], bRecordPos,
 										actorCommonArray[heapTimer[0]].bRegionInside[curRegionID]) +
 										recordMoleculesRecent(&microMolListRecent[curRegion][curMolType], &molListPassive3D[curMolPassive], actorCommonArray[heapTimer[0]].regionInterType[curRegionID], actorCommonArray[heapTimer[0]].regionInterBound[curRegionID], bRecordPos,
 										actorCommonArray[heapTimer[0]].bRegionInside[curRegionID]);
-								} else
+								}
+								else
 								{
 									actorPassiveArray[curPassive].curMolObs[curMolPassive] +=
 										recordMolecules(&microMolList[curRegion][curMolType], &molListPassive3D[curMolPassive], actorCommonArray[heapTimer[0]].regionInterType[curRegionID], actorCommonArray[heapTimer[0]].regionInterBound[curRegionID], bRecordPos,
@@ -660,7 +684,8 @@ int main(int argc, char *argv[])
 										recordMoleculesRecent(&microMolListRecent[curRegion][curMolType], &molListPassive3D[curMolPassive], actorCommonArray[heapTimer[0]].regionInterType[curRegionID], actorCommonArray[heapTimer[0]].regionInterBound[curRegionID], bRecordPos,
 										actorCommonArray[heapTimer[0]].bRegionInside[curRegionID]);
 								}
-							} else
+							}
+							else
 							{	// Search through subvolumes inside actor
 								for(curSubID = 0;
 									curSubID < actorCommonArray[heapTimer[0]].numSub[curRegionID];
