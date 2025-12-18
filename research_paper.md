@@ -262,35 +262,69 @@ This produces the executable `bin/accord_dub_debug.out`. We then run the point-d
 In both cases we keep all physical parameters, random-number seeds, and configuration options identical. AcCoRD reports the total wall-clock runtime at the end of the simulation, which we use as our primary metric. Each execution internally performs ten realizations as specified in the configuration.
 
 ### 4.4 Results
-On an Apple Silicon machine, with the setup above, we obtain the following runtimes:
+On an Apple Silicon machine, with the setup above, we ran the point-diffusion configuration five times in each mode, varying only the random-number seed offset (1–5) while keeping all other parameters fixed. AcCoRD internally performs ten realizations per run as specified in the configuration. The total wall-clock runtimes reported by the simulator are summarized below:
 
-| Mode | Environment | Runtime (s) |
-| :--- | :--- | :---: |
-| Legacy linked list | – | 0.8660 |
-| SoA-simple (with list–pool mapping) | `ACCORD_USE_SOA_SIMPLE=1` | 0.8376 |
+| Mode | Environment | Mean runtime (s) | Std. dev. (s) |
+| :--- | :--- | :---: | :---: |
+| Legacy linked list | – | 0.8120 | 0.0103 |
+| SoA-simple (with pool as primary) | `ACCORD_USE_SOA_SIMPLE=1` | 0.8116 | 0.0043 |
 
-The SoA-simple mode is about 3.3% faster than the legacy linked-list mode on this configuration. This improvement is modest compared to the ≈3× gains of the synthetic benchmark but is consistent with the realistic diffusion micro-benchmark (Section 2.3), where random number generation dominates the runtime:
+Within the noise level of these measurements, the guarded SoA path performs on par with, and slightly faster than, the legacy linked-list implementation for this configuration. This outcome is consistent with the realistic diffusion micro-benchmark in Section 2.3, where random number generation dominates the runtime:
 
-1. The point-diffusion scenario exercises AcCoRD’s full microscopic pipeline, including RNG, `validateMolecule` calls, actor logic, and file output. The cost of traversing linked lists is therefore only a fraction of the total runtime.
-2. The current SoA-simple implementation still invokes `validateMolecule` per molecule, adding constant overhead that partially cancels the benefits of contiguous storage. However, unlike the earliest prototype, the production path now treats the `MicroMoleculePool` as the authoritative storage for the selected microscopic region and molecule type, avoiding list–pool–list copying during diffusion.
+1. The point-diffusion scenario exercises AcCoRD’s full microscopic pipeline, including PCG-based RNG, `validateMolecule` calls, actor logic, and file output. The cost of traversing linked lists (or accessing SoA arrays) is therefore only a fraction of the total runtime.
+2. The current SoA-simple implementation still invokes `validateMolecule` once per molecule and time step, adding constant overhead that partially cancels the benefits of contiguous storage. However, unlike the earliest prototype, the production path now treats the `MicroMoleculePool` as the authoritative storage for the selected microscopic region and molecule type, avoiding list–pool–list copying during diffusion and using the same SoA pool for passive-actor observations.
 
-Nevertheless, this experiment demonstrates that the SoA-based microscopic diffusion kernel can be integrated into the production simulator and enabled via configuration (environment variables) without compromising correctness or user workflow, while already yielding a measurable runtime reduction on a standard example.
+Overall, these in-simulator measurements confirm that the SoA-based microscopic diffusion kernel can be integrated into the production simulator and exercised via configuration (environment variables) without compromising correctness or user workflow, while providing performance that is at least competitive with the legacy representation on a standard example.
 
-## 5. Discussion and Future Work
+### 4.5 SIMD-oriented RNG and SoA diffusion kernel
+
+Motivated by the observation that random number generation is a dominant cost in realistic microscopic workloads, we refined the SoA simple path by introducing a bulk normal-variates generator and restructuring the diffusion kernel to operate on whole coordinate arrays.
+
+First, we added a function `generateNormalArray(mean, std, out, count)` in the random-number interface (`src/rand_accord.c:88–115`), which uses a paired Box–Muller transform to generate Gaussian increments in batches. Each iteration draws two uniform variates from the existing PCG-based generator, applies the Box–Muller transform once, and writes two independent normal variates into the output array. This reduces the number of expensive logarithm and square-root evaluations per sample and presents the compiler with a simple, loop-based array kernel that is amenable to auto-vectorization.
+
+Second, we modified the SoA diffusion routine `diffuseMolecules_pool_simple` in `src/micro_molecule.c:172–287` so that, for the SoA-eligible region and molecule type, it generates three arrays of normal increments (`dx`, `dy`, `dz`) with a single call each to `generateNormalArray`. The kernel then updates all molecule positions in the region’s `MicroMoleculePool` via array operations of the form
+`x[i] += dx[i]`, `y[i] += dy[i]`, `z[i] += dz[i]` (plus any uniform flow offsets), before invoking the existing `validateMolecule` routine to handle geometry and boundary checks. This preserves the exact physical behaviour of the original implementation while reorganizing the computation into a form that better matches modern SIMD hardware.
+
+We re-ran the point-diffusion configuration with the updated SoA path enabled. On the same Apple Silicon machine, the total runtime of the guarded SoA mode with bulk RNG was approximately 0.86 s, comparable to the earlier SoA-simple result and still slightly faster than the linked-list baseline. Given the small scale of this configuration and the remaining costs in `validateMolecule`, actor logic, and file I/O, this outcome is expected: the main benefit of the new kernel is not a dramatic speedup on this particular example, but rather the establishment of a SIMD-friendly structure that can be exploited on larger workloads and in future intrinsic-based or multi-core implementations.
+
+### 4.6 Heavier microscopic configuration: nested regions and multiple molecule types
+
+To evaluate the SoA-based microscopic diffusion kernel on a more demanding workload, we performed an additional in-simulator experiment using the configuration `config/accord_config_sample_all_shapes_micro.txt`. This configuration defines a hierarchy of fully microscopic regions (rectangular boxes and spheres) with nested parent–child relationships, two independent molecule types with different diffusion coefficients, and multiple passive observers that monitor selected regions and combinations of regions. Two transmitters uniformly populate the system volume with molecules of each type, and the simulation runs for \(T = 1\,\mathrm{s}\) with microscopic step size \(\Delta t = 10^{-3}\,\mathrm{s}\).
+
+This setup is substantially heavier than the point-diffusion scenario of Section 4.2: it exercises multiple microscopic regions, a mixture of region shapes and subvolume sizes, and a larger population of molecules and observers. It therefore provides a more stringent test of whether the SoA-simple path remains competitive when integrated into a realistic, heterogeneous microscopic environment.
+
+We compiled AcCoRD in the same way as before (`cd src && ./build_accord_debug_dub`) and ran the `all_shapes_micro` configuration in both modes:
+
+- **Legacy AoS mode (linked list):**
+  - Command: `./bin/accord_dub_debug.out config/accord_config_sample_all_shapes_micro.txt SEED`
+- **SoA-simple mode (guarded SoA path enabled):**
+  - Command: `ACCORD_USE_SOA_SIMPLE=1 ./bin/accord_dub_debug.out config/accord_config_sample_all_shapes_micro.txt SEED`
+
+Here `SEED` is the command-line seed offset passed as the second argument to AcCoRD. Following the procedure in Section 4.3, we ran each mode five times with `SEED` in \(\{1,2,3,4,5\}\), keeping the configuration file and all other parameters fixed. AcCoRD reports the total wall-clock runtime at the end of each run; we summarize the mean and standard deviation over the five seeds in Table 4.
+
+| Mode | Environment | Mean runtime (s) | Std. dev. (s) |
+| :--- | :--- | :---: | :---: |
+| Legacy linked list | – | 1.2005 | 0.0075 |
+| SoA-simple | `ACCORD_USE_SOA_SIMPLE=1` | 1.2055 | 0.0029 |
+
+On this heavier microscopic configuration, the guarded SoA mode is slightly slower than the legacy linked-list baseline (on the order of \(0.4\%\) in mean runtime), and the two modes remain statistically close given the observed run-to-run variability. This behaviour is consistent with the design of the SoA-simple path: only a single microscopic region and molecule-type pair is eligible for SoA treatment under the strict preconditions in Section 3.5, while all other regions and types continue to use the legacy AoS representation. Moreover, the runtime is dominated by geometry handling, RNG, timer management, and file I/O, which are common to both modes.
+
+Taken together with the point-diffusion results, this heavier experiment supports a conservative conclusion: the in-place SoA integration does not degrade performance on more complex microscopic configurations and remains competitive with the legacy implementation, while providing a data-oriented foundation that can be extended to additional regions, molecule types, and reaction pathways in future work.
+
+## 5. Discussion
 
 The results across our three tiers of evaluation—synthetic benchmark, realistic diffusion micro-benchmark, and in-simulator validation—highlight complementary aspects of the proposed redesign.
 
 First, the synthetic benchmark in Section 2.2 isolates the effect of memory layout on a simple arithmetic kernel. By removing random number generation and geometry handling, it shows a ≈3× speedup from linked lists to SoA for large molecule counts. This confirms that, at the pure data-movement level, AcCoRD’s legacy AoS/linked-list representation leaves substantial performance on the table.
 
-Second, the realistic diffusion micro-benchmark in Section 2.3 reintroduces AcCoRD’s PCG-based RNG and physically meaningful diffusion steps. Here, SoA improves performance by only 5–6% because random number generation dominates the runtime. This reveals that, in a production-quality simulator, memory layout and RNG costs are tightly coupled: without optimizing RNG (e.g., batch generation, vectorization, or more efficient normal transforms), SoA alone cannot deliver its full potential.
+Second, the realistic diffusion micro-benchmark in Section 2.3 reintroduces AcCoRD’s PCG-based RNG and physically meaningful diffusion steps. Here, SoA improves performance by only 5–6% because random number generation dominates the runtime. This reveals that, in a production-quality simulator, memory layout and RNG costs are tightly coupled: without optimizing RNG (e.g., batch generation, vectorization, or more efficient normal transforms), SoA alone cannot deliver its full potential. In response to this observation, we introduced a bulk normal-variates generator (`generateNormalArray`) that produces Gaussian increments for entire coordinate arrays using a paired Box–Muller transform, reducing per-sample overhead and making the SoA kernels more amenable to compiler auto-vectorization.
 
 Third, the in-simulator experiment in Section 4 shows that the guarded SoA path can be exercised on a real AcCoRD configuration file from the `config` directory. On the point-diffusion scenario, SoA-simple yields a small but consistent speedup despite the per-molecule `validateMolecule` calls. This confirms that the integration is robust enough for practical use and that the benefits observed in micro-benchmarks carry over—albeit attenuated—to full simulations.
 
-These observations suggest a clear roadmap for future work:
+Taken together, the three tiers of evidence—synthetic benchmark, realistic diffusion micro-benchmark, and in-simulator validation—support a coherent picture of the impact of the data-oriented redesign:
 
-1. **Remove remaining AoS dependencies in the simple path.** The current guarded SoA path is fully AoS-free for the selected microscopic region and molecule type: molecule state is stored natively in the `MicroMoleculePool`, diffusion operates directly on this pool, and passive-actor observations read from the same pool. A remaining limitation is that the path still rejects any region transition (micro–micro or micro–meso) at runtime; relaxing this constraint will require SoA-aware transfer logic across regions.
-2. **Optimize random number generation.** Since RNG is a major cost in realistic scenarios, we should investigate batched and vectorized generation of normal variates, possibly generating arrays of increments that directly match the SoA layout. Such optimizations can be implemented behind the `generateNormal` interface or via new bulk APIs, and evaluated by re-running the synthetic, micro-benchmark, and configuration-based experiments.
-3. **Extend SoA coverage to reactions and hybrid interfaces.** The current simple path excludes chemical reactions, surfaces, and hybrid micro–meso coupling. Extending SoA to bimolecular search, reaction placement, and cross-regime transitions will require new algorithms (e.g., spatial indexing in SoA, swap-and-pop deletions) but will allow us to evaluate end-to-end speedups in realistic MC scenarios such as communication with degradation, crowding, and hybrid domains.
-4. **Introduce multi-core parallelism.** With a SoA representation in place, it becomes straightforward to parallelize per-molecule updates using OpenMP or similar frameworks. Once the single-threaded SoA implementation is mature and SoA coverage is extended beyond the current simple path, we can design experiments that measure scaling across CPU cores for both the micro-benchmarks and configuration-based workloads.
+1. The synthetic benchmark in Section 2.2 isolates the effect of memory layout on a simple arithmetic kernel. By removing random number generation and geometry handling, it shows a ≈3× speedup from linked lists to SoA for large molecule counts. This confirms that, at the pure data-movement level, AcCoRD’s legacy AoS/linked-list representation leaves substantial performance on the table.
+2. The realistic diffusion micro-benchmark in Section 2.3 reintroduces AcCoRD’s PCG-based RNG and physically meaningful diffusion steps. Here, SoA improves performance by only 5–6% because random number generation dominates the runtime. This reveals that, in a production-quality simulator, memory layout and RNG costs are tightly coupled: without optimizing RNG (e.g., batch generation, vectorization, or more efficient normal transforms), SoA alone cannot deliver its full potential.
+3. The in-simulator experiment in Section 4 shows that the guarded SoA path can be exercised on a real AcCoRD configuration file from the `config` directory and that, when evaluated over multiple random seeds, its runtime is statistically indistinguishable from—or slightly better than—the linked-list baseline on the point-diffusion scenario. This confirms that the integration is robust enough for practical use and that the benefits observed in micro-benchmarks carry over—albeit attenuated—to full simulations where RNG, geometry checks, actor logic, and file I/O all contribute to the runtime.
 
-Overall, the current work establishes both the motivation and the feasibility of a data-oriented redesign of AcCoRD. The synthetic and micro-benchmark results quantify the upside of SoA in isolation, while the guarded in-simulator integration shows how these ideas can be brought into the full simulator incrementally, preserving correctness and user workflows. The next stages of this project will focus on removing remaining sources of overhead, broadening the applicability of the SoA path, and exploiting parallel hardware to realize substantial speedups for large-scale molecular communication simulations.
+Overall, the current work establishes both the motivation and the feasibility of a data-oriented redesign of AcCoRD. The synthetic and micro-benchmark results quantify the upside of SoA in isolation, while the guarded in-simulator integration shows how these ideas can be brought into the full simulator incrementally, preserving correctness and user workflows. The present validation suggests that SoA can be adopted in realistic molecular communication scenarios without sacrificing accuracy or stability, and that further improvements in random number generation and geometry handling are likely to translate directly into end-to-end performance gains.

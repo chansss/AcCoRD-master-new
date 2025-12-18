@@ -184,6 +184,9 @@ static void diffuseMolecules_pool_simple(const short NUM_REGIONS,
 	size_t i;
 	double oldPoint[3];
 	double newPoint[3];
+	double* dx;
+	double* dy;
+	double* dz;
 	bool bPointChange;
 	bool bReaction;
 	bool bApmcCur;
@@ -203,16 +206,35 @@ static void diffuseMolecules_pool_simple(const short NUM_REGIONS,
 	if(!regionArray[curRegion].bDiffuse[curType]
 		&& !regionArray[curRegion].spec.bFlow[curType])
 		return;
-
-	for(i = 0; i < pool->count; i++)
-		pool->bNeedUpdate[i] = true;
+	dx = NULL;
+	dy = NULL;
+	dz = NULL;
+	if(regionArray[curRegion].bDiffuse[curType])
+	{
+		dx = (double*)malloc(pool->count * sizeof(double));
+		dy = (double*)malloc(pool->count * sizeof(double));
+		dz = (double*)malloc(pool->count * sizeof(double));
+		if(dx == NULL || dy == NULL || dz == NULL)
+		{
+			fprintf(stderr, "ERROR: Memory allocation failed for SoA diffusion increments.\n");
+			exit(EXIT_FAILURE);
+		}
+		generateNormalArray(0.0,
+			sigma[curRegion][curType],
+			dx,
+			pool->count);
+		generateNormalArray(0.0,
+			sigma[curRegion][curType],
+			dy,
+			pool->count);
+		generateNormalArray(0.0,
+			sigma[curRegion][curType],
+			dz,
+			pool->count);
+	}
 
 	for(i = 0; i < pool->count; i++)
 	{
-		if(!pool->bNeedUpdate[i])
-			continue;
-		pool->bNeedUpdate[i] = false;
-
 		oldPoint[0] = pool->x[i];
 		oldPoint[1] = pool->y[i];
 		oldPoint[2] = pool->z[i];
@@ -223,12 +245,9 @@ static void diffuseMolecules_pool_simple(const short NUM_REGIONS,
 
 		if(regionArray[curRegion].bDiffuse[curType])
 		{
-			newPoint[0] = generateNormal(newPoint[0],
-				sigma[curRegion][curType]);
-			newPoint[1] = generateNormal(newPoint[1],
-				sigma[curRegion][curType]);
-			newPoint[2] = generateNormal(newPoint[2],
-				sigma[curRegion][curType]);
+			newPoint[0] += dx[i];
+			newPoint[1] += dy[i];
+			newPoint[2] += dz[i];
 		}
 		if(regionArray[curRegion].spec.bFlow[curType])
 		{
@@ -280,11 +299,16 @@ static void diffuseMolecules_pool_simple(const short NUM_REGIONS,
 			fprintf(stderr, "ERROR: SoA simple path encountered region transition.\n");
 			exit(EXIT_FAILURE);
 		}
-
 		pool->x[i] = newPoint[0];
 		pool->y[i] = newPoint[1];
 		pool->z[i] = newPoint[2];
 	}
+	if(dx != NULL)
+		free(dx);
+	if(dy != NULL)
+		free(dy);
+	if(dz != NULL)
+		free(dz);
 }
 
 // Specific Definitions

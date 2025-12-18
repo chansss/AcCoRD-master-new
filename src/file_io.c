@@ -2820,9 +2820,8 @@ void printOneTextRealization(FILE * out,
 	NodeData * curData;
 	NodeObs3D * curObs;
 	unsigned short curMolInd, curMolType;
-	ListMol3D * curMolList;
-	NodeMol3D * curMolNode;
 	uint32_t curActiveBits, curPassiveObs;
+	uint64_t curPos;
 	
 	fprintf(out, "Realization %u:\n", curRepeat);
 	
@@ -2905,19 +2904,22 @@ void printOneTextRealization(FILE * out,
 				while(curObs != NULL)
 				{		
 					fprintf(out, "\n\t\t\t\t");
-					// Each observation will have the positions of some number of molecules
 					fprintf(out, "(");
-					curMolList = curObs->item.molPos[curMolInd];
-					if(!isListMol3DEmpty(curMolList))
+					if(curObs->item.molPosX != NULL
+						&& curObs->item.molPosY != NULL
+						&& curObs->item.molPosZ != NULL
+						&& curObs->item.molPosX[curMolInd] != NULL
+						&& curObs->item.molPosY[curMolInd] != NULL
+						&& curObs->item.molPosZ[curMolInd] != NULL)
 					{
-						curMolNode = *curMolList;
-						while(curMolNode != NULL)
+						for(curPos = 0; curPos < curObs->item.paramUllong[curMolInd]; curPos++)
 						{
 							fprintf(out, "(%e, %e, %e) ",
-								curMolNode->item.x, curMolNode->item.y, curMolNode->item.z);
-							curMolNode = curMolNode->next;
+								curObs->item.molPosX[curMolInd][curPos],
+								curObs->item.molPosY[curMolInd][curPos],
+								curObs->item.molPosZ[curMolInd][curPos]);
 						}
-					}						
+					}
 					fprintf(out, ")");		
 					curObs = curObs->next;
 				}
@@ -3015,4 +3017,3 @@ void printTextEnd(FILE * out,
 	cJSON_Delete(root);
 	free(outText);
 }
-

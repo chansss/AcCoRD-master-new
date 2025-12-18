@@ -39,7 +39,9 @@ struct observation_list3D {
 	unsigned short numUllong; // number of uint64_t parameters
 	double * paramDouble; // array of double parameters
 	uint64_t * paramUllong; // array of uint64_t parameters
-	ListMol3D ** molPos; // Linked list of molecule coordinates
+	double ** molPosX;
+	double ** molPosY;
+	double ** molPosZ;
 };
 
 // General (linked list) type declarations

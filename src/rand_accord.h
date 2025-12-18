@@ -48,6 +48,11 @@ double generateTriangular();
 // Return a normal random number
 double generateNormal(const double mean,
 	const double variance);
+
+void generateNormalArray(const double mean,
+	const double std,
+	double* out,
+	size_t count);
 	
 // Return a Poisson random number
 uint64_t generatePoisson(double mean);

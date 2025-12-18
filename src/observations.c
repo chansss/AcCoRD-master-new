@@ -52,16 +52,18 @@ bool addObservation(ListObs3D * list,
 	double * paramDoubleNew = malloc(numDouble * sizeof(double));
 	uint64_t * paramUllongNew =
 		malloc(numUllong * sizeof(uint64_t));
-	ListMol3D ** molPosListNew = malloc(list->numMolTypeObs * sizeof(ListMol3D *));
-	if(paramDoubleNew == NULL || paramDoubleNew == NULL || molPosListNew == NULL)
+	double ** molPosXNew = malloc(list->numMolTypeObs * sizeof(double *));
+	double ** molPosYNew = malloc(list->numMolTypeObs * sizeof(double *));
+	double ** molPosZNew = malloc(list->numMolTypeObs * sizeof(double *));
+	if(paramDoubleNew == NULL || paramUllongNew == NULL
+		|| molPosXNew == NULL || molPosYNew == NULL || molPosZNew == NULL)
 		return false;
 	
 	for(curMolInd = 0; curMolInd < list->numMolTypeObs; curMolInd++)
 	{
-		molPosListNew[curMolInd] = malloc(sizeof(ListMol3D));
-		if(molPosListNew[curMolInd] == NULL)
-			return false;
-		initializeListMol(molPosListNew[curMolInd]);
+		molPosXNew[curMolInd] = NULL;
+		molPosYNew[curMolInd] = NULL;
+		molPosZNew[curMolInd] = NULL;
 	}
 	
 	
@@ -81,24 +83,41 @@ bool addObservation(ListObs3D * list,
 		molPosList = molPos[curMolInd];
 		if(!isListMol3DEmpty(&molPos[curMolInd]))
 		{
-			while(molPosList != NULL)
+			uint64_t count = paramUllongNew[curMolInd];
+			if(count > 0ULL)
 			{
-				if(!addMolecule(molPosListNew[curMolInd],
-					molPosList->item.x, molPosList->item.y, molPosList->item.z))
+				uint64_t idx = 0ULL;
+				molPosXNew[curMolInd] = malloc(count * sizeof(double));
+				molPosYNew[curMolInd] = malloc(count * sizeof(double));
+				molPosZNew[curMolInd] = malloc(count * sizeof(double));
+				if(molPosXNew[curMolInd] == NULL || molPosYNew[curMolInd] == NULL
+					|| molPosZNew[curMolInd] == NULL)
 				{
-					// Creation of molecule failed
 					fprintf(stderr, "ERROR: Memory allocation to record molecule positions.\n");
 					exit(EXIT_FAILURE);
 				}
+			while(molPosList != NULL)
+			{
+					if(idx >= count)
+						break;
+					molPosXNew[curMolInd][idx] = molPosList->item.x;
+					molPosYNew[curMolInd][idx] = molPosList->item.y;
+					molPosZNew[curMolInd][idx] = molPosList->item.z;
+					idx++;
 				molPosList = molPosList->next;
 			}
-		} else
-		{
-			*(molPosListNew[curMolInd]) = NULL;
+			}
 		}
 	}
 	
-	ItemObs3D newObs3D = {numDouble,numUllong,paramDoubleNew,paramUllongNew,molPosListNew};
+	ItemObs3D newObs3D;
+	newObs3D.numDouble = numDouble;
+	newObs3D.numUllong = numUllong;
+	newObs3D.paramDouble = paramDoubleNew;
+	newObs3D.paramUllong = paramUllongNew;
+	newObs3D.molPosX = molPosXNew;
+	newObs3D.molPosY = molPosYNew;
+	newObs3D.molPosZ = molPosZNew;
 	return addItem(newObs3D, list);
 }
 
@@ -187,11 +206,13 @@ void emptyListObs(ListObs3D * list)
 		free(list->head->item.paramUllong);
 		for(curMolInd = 0; curMolInd < list->numMolTypeObs; curMolInd++)
 		{
-			if(!isListMol3DEmpty(list->head->item.molPos[curMolInd]))
-				emptyListMol(list->head->item.molPos[curMolInd]);
-			free(list->head->item.molPos[curMolInd]);
+			free(list->head->item.molPosX[curMolInd]);
+			free(list->head->item.molPosY[curMolInd]);
+			free(list->head->item.molPosZ[curMolInd]);
 		}
-		free(list->head->item.molPos);
+		free(list->head->item.molPosX);
+		free(list->head->item.molPosY);
+		free(list->head->item.molPosZ);
 		free(list->head);				// Free memory of current node
 		list->head = p_save;			// Advance to next node
 	}

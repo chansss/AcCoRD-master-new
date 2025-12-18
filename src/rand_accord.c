@@ -52,8 +52,6 @@ double generateTriangular()
 		return (2-sqrt(2*(1-uniRV)));
 }
 
-// Return a normal random number via Box-Muller transform
-// Transform will generate 2 normal RVs; 1 is kept to return in the following call
 double generateNormal(const double mean,
 	const double std)
 {
@@ -77,12 +75,46 @@ double generateNormal(const double mean,
 		yVal = 2.*generateUniform() - 1.0;
 		magnitude = xVal*xVal + yVal*yVal;
 	} while (magnitude > 1.0 || magnitude == 0.);
-	
+		
 	// Convert uniform RV to normal
 	offset = sqrt(-2.0*log(magnitude)/magnitude);
 	
 	// Return xVal (yVal will be returned in next call)
 	return mean + std*xVal*offset;
+}
+
+void generateNormalArray(const double mean,
+	const double std,
+	double* out,
+	size_t count)
+{
+	size_t i;
+	size_t limit;
+	if(count < 2)
+	{
+		if(count == 1)
+			out[0] = generateNormal(mean, std);
+		return;
+	}
+	limit = count & ~(size_t)1;
+	for(i = 0; i < limit; i += 2)
+	{
+		double magnitude;
+		double xVal;
+		double yVal;
+		double offset;
+		do
+		{
+			xVal = 2.*generateUniform() - 1.0;
+			yVal = 2.*generateUniform() - 1.0;
+			magnitude = xVal*xVal + yVal*yVal;
+		} while (magnitude > 1.0 || magnitude == 0.);
+		offset = sqrt(-2.0*log(magnitude)/magnitude);
+		out[i] = mean + std * xVal * offset;
+		out[i + 1] = mean + std * yVal * offset;
+	}
+	if(limit != count)
+		out[count - 1] = generateNormal(mean, std);
 }
 	
 // Return a Poisson random number
