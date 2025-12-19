@@ -124,7 +124,7 @@
 #include <string.h> // for strcpy()
 #include <time.h> // For time record keeping
 #ifndef __linux__
-	// #include <direct.h> // for _mkdir() [Windows]
+	#include <direct.h> // for _mkdir() [Windows]
 #endif // __linux__
 #include "cJSON.h"
 #include "region.h"
