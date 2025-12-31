@@ -571,6 +571,8 @@ int main(int argc, char *argv[])
 			// Determine the next type of step in the simulation
 			if (heapTimer[0] < spec.NUM_ACTORS)
 			{	// Next step is by an Actor
+				const short curTimerID = heapTimer[0];
+				bool bMesoTimerUpdated = false;
 		
 				tCur = timerArray[heapTimer[0]].nextTime;
 		
@@ -614,6 +616,7 @@ int main(int argc, char *argv[])
 						timerArray[MESO_TIMER_ID].nextTime =
 							mesoSubArray[heap_subvolID[0]].t_rxn;
 						tMeso = mesoSubArray[heap_subvolID[0]].t_rxn;
+						bMesoTimerUpdated = true;
 						}
 					}
 					
@@ -765,6 +768,183 @@ int main(int argc, char *argv[])
 					{
 						emptyListMol(&molListPassive3D[j]);
 					}
+
+					for(curActive = 0; curActive < NUM_ACTORS_ACTIVE; curActive++)
+					{
+						short depActorID = actorActiveArray[curActive].actorID;
+						uint64_t depCount = 0ULL;
+						bool depAbove;
+						unsigned short depMolType;
+						unsigned short depMode;
+
+						if(actorCommonArray[depActorID].spec.bIndependent)
+							continue;
+						if(!actorCommonArray[depActorID].spec.bActive)
+							continue;
+						if(actorCommonArray[depActorID].spec.dependentPassiveActorID != heapTimer[0])
+							continue;
+						if(timerArray[heapTimer[0]].nextTime < actorCommonArray[depActorID].spec.startTime)
+							continue;
+						if(actorCommonArray[depActorID].spec.bMaxAction
+							&& actorCommonArray[depActorID].curAction >= actorCommonArray[depActorID].spec.numMaxAction)
+							continue;
+
+						depMolType = actorCommonArray[depActorID].spec.dependentMolType;
+						for(curMolPassive = 0;
+							curMolPassive < actorPassiveArray[curPassive].numMolRecordID;
+							curMolPassive++)
+						{
+							if(actorPassiveArray[curPassive].molRecordID[curMolPassive] == depMolType)
+							{
+								depCount = actorPassiveArray[curPassive].curMolObs[curMolPassive];
+								break;
+							}
+						}
+
+						depMode = actorCommonArray[depActorID].spec.dependentTriggerMode;
+						if(depMode == 1)
+						{
+							uint64_t prevCount = actorActiveArray[curActive].depPrevCount;
+							if(actorCommonArray[depActorID].spec.dependentTriggerValue > 0ULL
+								&& depCount >= prevCount + actorCommonArray[depActorID].spec.dependentTriggerValue)
+							{
+								unsigned short relayMode = actorCommonArray[depActorID].spec.dependentRelayMode;
+								actorCommonArray[depActorID].curAction++;
+								if(relayMode == 0)
+								{
+									newRelease(&actorCommonArray[depActorID], &actorActiveArray[curActive],
+										timerArray[heapTimer[0]].nextTime);
+								} else
+								{
+									double obsValue;
+									double strength;
+									
+									if(relayMode == 2)
+									{
+										if(depCount >= prevCount)
+											obsValue = (double) (depCount - prevCount);
+										else
+											obsValue = - (double) (prevCount - depCount);
+									} else
+									{
+										obsValue = (double) depCount;
+									}
+									
+									strength = actorCommonArray[depActorID].spec.dependentRelayGain * obsValue
+										+ actorCommonArray[depActorID].spec.dependentRelayBias;
+									if(strength < actorCommonArray[depActorID].spec.dependentRelayMinStrength)
+										strength = actorCommonArray[depActorID].spec.dependentRelayMinStrength;
+									if(strength > actorCommonArray[depActorID].spec.dependentRelayMaxStrength)
+										strength = actorCommonArray[depActorID].spec.dependentRelayMaxStrength;
+									
+									newReleaseWithStrength(&actorCommonArray[depActorID], &actorActiveArray[curActive],
+										timerArray[heapTimer[0]].nextTime, strength);
+								}
+								actorActiveArray[curActive].nextNewReleaseTime = INFINITY;
+								actorActiveArray[curActive].bNextActionNewRelease = false;
+								timerArray[depActorID].nextTime = actorActiveArray[curActive].nextEmissionTime;
+								actorCommonArray[depActorID].nextTime = timerArray[depActorID].nextTime;
+								heapTimerUpdate(NUM_TIMERS, timerArray, heapTimer,
+									timerArray[depActorID].heapID, heapTimerChildID, b_heapTimerChildValid);
+							}
+							actorActiveArray[curActive].depPrevCount = depCount;
+						} else
+						{
+							uint64_t prevCount = actorActiveArray[curActive].depPrevCount;
+							depAbove = (depCount >= actorCommonArray[depActorID].spec.dependentTriggerValue);
+							if(actorCommonArray[depActorID].spec.bDependentRisingEdge)
+							{
+								if(depAbove && !actorActiveArray[curActive].depPrevAbove)
+								{
+									unsigned short relayMode = actorCommonArray[depActorID].spec.dependentRelayMode;
+									actorCommonArray[depActorID].curAction++;
+									if(relayMode == 0)
+									{
+										newRelease(&actorCommonArray[depActorID], &actorActiveArray[curActive],
+											timerArray[heapTimer[0]].nextTime);
+									} else
+									{
+										double obsValue;
+										double strength;
+										
+										if(relayMode == 2)
+										{
+											if(depCount >= prevCount)
+												obsValue = (double) (depCount - prevCount);
+											else
+												obsValue = - (double) (prevCount - depCount);
+										} else
+										{
+											obsValue = (double) depCount;
+										}
+										
+										strength = actorCommonArray[depActorID].spec.dependentRelayGain * obsValue
+											+ actorCommonArray[depActorID].spec.dependentRelayBias;
+										if(strength < actorCommonArray[depActorID].spec.dependentRelayMinStrength)
+											strength = actorCommonArray[depActorID].spec.dependentRelayMinStrength;
+										if(strength > actorCommonArray[depActorID].spec.dependentRelayMaxStrength)
+											strength = actorCommonArray[depActorID].spec.dependentRelayMaxStrength;
+										
+										newReleaseWithStrength(&actorCommonArray[depActorID], &actorActiveArray[curActive],
+											timerArray[heapTimer[0]].nextTime, strength);
+									}
+									actorActiveArray[curActive].nextNewReleaseTime = INFINITY;
+									actorActiveArray[curActive].bNextActionNewRelease = false;
+									timerArray[depActorID].nextTime = actorActiveArray[curActive].nextEmissionTime;
+									actorCommonArray[depActorID].nextTime = timerArray[depActorID].nextTime;
+									heapTimerUpdate(NUM_TIMERS, timerArray, heapTimer,
+										timerArray[depActorID].heapID, heapTimerChildID, b_heapTimerChildValid);
+								}
+								actorActiveArray[curActive].depPrevAbove = depAbove;
+							} else
+							{
+								if(depAbove)
+								{
+									unsigned short relayMode = actorCommonArray[depActorID].spec.dependentRelayMode;
+									actorCommonArray[depActorID].curAction++;
+									if(relayMode == 0)
+									{
+										newRelease(&actorCommonArray[depActorID], &actorActiveArray[curActive],
+											timerArray[heapTimer[0]].nextTime);
+									} else
+									{
+										double obsValue;
+										double strength;
+										
+										if(relayMode == 2)
+										{
+											if(depCount >= prevCount)
+												obsValue = (double) (depCount - prevCount);
+											else
+												obsValue = - (double) (prevCount - depCount);
+										} else
+										{
+											obsValue = (double) depCount;
+										}
+										
+										strength = actorCommonArray[depActorID].spec.dependentRelayGain * obsValue
+											+ actorCommonArray[depActorID].spec.dependentRelayBias;
+										if(strength < actorCommonArray[depActorID].spec.dependentRelayMinStrength)
+											strength = actorCommonArray[depActorID].spec.dependentRelayMinStrength;
+										if(strength > actorCommonArray[depActorID].spec.dependentRelayMaxStrength)
+											strength = actorCommonArray[depActorID].spec.dependentRelayMaxStrength;
+										
+										newReleaseWithStrength(&actorCommonArray[depActorID], &actorActiveArray[curActive],
+											timerArray[heapTimer[0]].nextTime, strength);
+									}
+									actorActiveArray[curActive].nextNewReleaseTime = INFINITY;
+									actorActiveArray[curActive].bNextActionNewRelease = false;
+									timerArray[depActorID].nextTime = actorActiveArray[curActive].nextEmissionTime;
+									actorCommonArray[depActorID].nextTime = timerArray[depActorID].nextTime;
+									heapTimerUpdate(NUM_TIMERS, timerArray, heapTimer,
+										timerArray[depActorID].heapID, heapTimerChildID, b_heapTimerChildValid);
+								}
+								actorActiveArray[curActive].depPrevAbove = depAbove;
+							}
+						}
+						if(depMode != 1)
+							actorActiveArray[curActive].depPrevCount = depCount;
+					}
 					
 					// Update timer structure array
 					if (actorCommonArray[heapTimer[0]].spec.bIndependent)
@@ -787,6 +967,14 @@ int main(int argc, char *argv[])
 						actorCommonArray[heapTimer[0]].nextTime = INFINITY;
 						timerArray[heapTimer[0]].nextTime = INFINITY;
 					}
+				}
+				
+				heapTimerUpdate(NUM_TIMERS, timerArray, heapTimer, timerArray[curTimerID].heapID,
+					heapTimerChildID, b_heapTimerChildValid);
+				if(bMesoTimerUpdated)
+				{
+					heapTimerUpdate(NUM_TIMERS, timerArray, heapTimer, timerArray[MESO_TIMER_ID].heapID,
+						heapTimerChildID, b_heapTimerChildValid);
 				}
 						
 			} else if (heapTimer[0] > spec.NUM_ACTORS)

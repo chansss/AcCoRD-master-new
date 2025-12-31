@@ -123,6 +123,17 @@ struct actorStructSpec3D { // Configuration parameters
 	
 	// Frequency of independent behavior (if bIndependent == true)
 	double actionInterval;
+
+	short dependentPassiveActorID;
+	unsigned short dependentMolType;
+	unsigned short dependentTriggerMode;
+	uint64_t dependentTriggerValue;
+	bool bDependentRisingEdge;
+	unsigned short dependentRelayMode;
+	double dependentRelayGain;
+	double dependentRelayBias;
+	double dependentRelayMinStrength;
+	double dependentRelayMaxStrength;
 	
 	// Record observations of actor to output file
 	bool bWrite;
@@ -326,6 +337,9 @@ struct actorActiveStruct3D { // Active actor parameters
 	
 	// Random data associated with the actor
 	ListData binaryData;
+
+	uint64_t depPrevCount;
+	bool depPrevAbove;
 };
 
 /* The actorPassiveStruct3D structure contains all parameters specific to a passive 3D
@@ -448,6 +462,11 @@ void deleteActor(const short NUM_ACTORS,
 void newRelease(const struct actorStruct3D * actorCommon,
 	struct actorActiveStruct3D * actorActive,
 	double curTime);
+
+void newReleaseWithStrength(const struct actorStruct3D * actorCommon,
+	struct actorActiveStruct3D * actorActive,
+	double curTime,
+	double strengthOverride);
 
 void findNextEmission(const struct actorStruct3D * actorCommon,
 	struct actorActiveStruct3D * actorActive);

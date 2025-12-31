@@ -2081,6 +2081,17 @@ void loadConfig(const char * CONFIG_NAME,
 			curSpec->actorSpec[curArrayItem].actionInterval = 
 				cJSON_GetObjectItem(curObj, "Action Interval")->valuedouble;
 		}
+
+		curSpec->actorSpec[curArrayItem].dependentPassiveActorID = -1;
+		curSpec->actorSpec[curArrayItem].dependentMolType = 0;
+		curSpec->actorSpec[curArrayItem].dependentTriggerMode = 0;
+		curSpec->actorSpec[curArrayItem].dependentTriggerValue = 1ULL;
+		curSpec->actorSpec[curArrayItem].bDependentRisingEdge = true;
+		curSpec->actorSpec[curArrayItem].dependentRelayMode = 0;
+		curSpec->actorSpec[curArrayItem].dependentRelayGain = 1.;
+		curSpec->actorSpec[curArrayItem].dependentRelayBias = 0.;
+		curSpec->actorSpec[curArrayItem].dependentRelayMinStrength = 0.;
+		curSpec->actorSpec[curArrayItem].dependentRelayMaxStrength = INFINITY;
 		
 		if(!cJSON_bItemValid(curObj,"Is Actor Activity Recorded?", cJSON_True))
 		{ // Actor does not have a valid Is Actor Activity Recorded?
@@ -2095,6 +2106,170 @@ void loadConfig(const char * CONFIG_NAME,
 		
 		if(curSpec->actorSpec[curArrayItem].bActive)
 		{ // Actor is active. Check for all active parameters
+
+			if(!curSpec->actorSpec[curArrayItem].bIndependent)
+			{
+				if(!cJSON_bItemValid(curObj,"Dependent Passive Actor ID", cJSON_Number)
+					|| cJSON_GetObjectItem(curObj,"Dependent Passive Actor ID")->valueint < 0
+					|| cJSON_GetObjectItem(curObj,"Dependent Passive Actor ID")->valueint >= curSpec->NUM_ACTORS)
+				{
+					bWarn = true;
+					printf("WARNING %d: Actor %d does not have a valid \"Dependent Passive Actor ID\". Assigning default value \"-1\".\n", numWarn++, curArrayItem);
+					curSpec->actorSpec[curArrayItem].dependentPassiveActorID = -1;
+				} else
+				{
+					curSpec->actorSpec[curArrayItem].dependentPassiveActorID =
+						(short) cJSON_GetObjectItem(curObj,"Dependent Passive Actor ID")->valueint;
+				}
+
+				if(!cJSON_bItemValid(curObj,"Dependent Molecule Type", cJSON_Number)
+					|| cJSON_GetObjectItem(curObj,"Dependent Molecule Type")->valueint < 0
+					|| cJSON_GetObjectItem(curObj,"Dependent Molecule Type")->valueint >= curSpec->NUM_MOL_TYPES)
+				{
+					bWarn = true;
+					printf("WARNING %d: Actor %d does not have a valid \"Dependent Molecule Type\". Assigning default value \"0\".\n", numWarn++, curArrayItem);
+					curSpec->actorSpec[curArrayItem].dependentMolType = 0;
+				} else
+				{
+					curSpec->actorSpec[curArrayItem].dependentMolType =
+						(unsigned short) cJSON_GetObjectItem(curObj,"Dependent Molecule Type")->valueint;
+				}
+
+				if(!cJSON_bItemValid(curObj,"Dependent Trigger Mode", cJSON_Number)
+					|| cJSON_GetObjectItem(curObj,"Dependent Trigger Mode")->valueint < 0
+					|| cJSON_GetObjectItem(curObj,"Dependent Trigger Mode")->valueint > 1)
+				{
+					bWarn = true;
+					printf("WARNING %d: Actor %d does not have a valid \"Dependent Trigger Mode\". Assigning default value \"0\".\n", numWarn++, curArrayItem);
+					curSpec->actorSpec[curArrayItem].dependentTriggerMode = 0;
+				} else
+				{
+					curSpec->actorSpec[curArrayItem].dependentTriggerMode =
+						(unsigned short) cJSON_GetObjectItem(curObj,"Dependent Trigger Mode")->valueint;
+				}
+
+				if(!cJSON_bItemValid(curObj,"Dependent Trigger Value", cJSON_Number)
+					|| cJSON_GetObjectItem(curObj,"Dependent Trigger Value")->valuedouble < 0.)
+				{
+					bWarn = true;
+					printf("WARNING %d: Actor %d does not have a valid \"Dependent Trigger Value\". Assigning default value \"1\".\n", numWarn++, curArrayItem);
+					curSpec->actorSpec[curArrayItem].dependentTriggerValue = 1ULL;
+				} else
+				{
+					curSpec->actorSpec[curArrayItem].dependentTriggerValue =
+						(uint64_t) cJSON_GetObjectItem(curObj,"Dependent Trigger Value")->valuedouble;
+				}
+
+				if(!cJSON_bItemValid(curObj,"Dependent Trigger on Rising Edge?", cJSON_True))
+				{
+					curSpec->actorSpec[curArrayItem].bDependentRisingEdge = true;
+				} else
+				{
+					curSpec->actorSpec[curArrayItem].bDependentRisingEdge =
+						cJSON_GetObjectItem(curObj,"Dependent Trigger on Rising Edge?")->valueint;
+				}
+
+				if(!cJSON_bItemValid(curObj,"Dependent Relay Mode", cJSON_Number)
+					|| cJSON_GetObjectItem(curObj,"Dependent Relay Mode")->valueint < 0
+					|| cJSON_GetObjectItem(curObj,"Dependent Relay Mode")->valueint > 2)
+				{
+					curSpec->actorSpec[curArrayItem].dependentRelayMode = 0;
+				} else
+				{
+					curSpec->actorSpec[curArrayItem].dependentRelayMode =
+						(unsigned short) cJSON_GetObjectItem(curObj,"Dependent Relay Mode")->valueint;
+				}
+
+				if(!cJSON_bItemValid(curObj,"Dependent Relay Gain", cJSON_Number)
+					|| cJSON_GetObjectItem(curObj,"Dependent Relay Gain")->valuedouble < 0.)
+				{
+					curSpec->actorSpec[curArrayItem].dependentRelayGain = 1.;
+				} else
+				{
+					curSpec->actorSpec[curArrayItem].dependentRelayGain =
+						cJSON_GetObjectItem(curObj,"Dependent Relay Gain")->valuedouble;
+				}
+
+				if(!cJSON_bItemValid(curObj,"Dependent Relay Bias", cJSON_Number))
+				{
+					curSpec->actorSpec[curArrayItem].dependentRelayBias = 0.;
+				} else
+				{
+					curSpec->actorSpec[curArrayItem].dependentRelayBias =
+						cJSON_GetObjectItem(curObj,"Dependent Relay Bias")->valuedouble;
+				}
+
+				if(!cJSON_bItemValid(curObj,"Dependent Relay Min Strength", cJSON_Number))
+				{
+					curSpec->actorSpec[curArrayItem].dependentRelayMinStrength = 0.;
+				} else
+				{
+					curSpec->actorSpec[curArrayItem].dependentRelayMinStrength =
+						cJSON_GetObjectItem(curObj,"Dependent Relay Min Strength")->valuedouble;
+				}
+
+				if(!cJSON_bItemValid(curObj,"Dependent Relay Max Strength", cJSON_Number)
+					|| cJSON_GetObjectItem(curObj,"Dependent Relay Max Strength")->valuedouble < 0.)
+				{
+					curSpec->actorSpec[curArrayItem].dependentRelayMaxStrength = INFINITY;
+				} else
+				{
+					curSpec->actorSpec[curArrayItem].dependentRelayMaxStrength =
+						cJSON_GetObjectItem(curObj,"Dependent Relay Max Strength")->valuedouble;
+				}
+			} else
+			{
+				if(cJSON_bItemValid(curObj,"Dependent Passive Actor ID", cJSON_Number))
+				{
+					bWarn = true;
+					printf("WARNING %d: Actor %d does not need \"Dependent Passive Actor ID\" defined. Ignoring.\n", numWarn++, curArrayItem);
+				}
+				if(cJSON_bItemValid(curObj,"Dependent Molecule Type", cJSON_Number))
+				{
+					bWarn = true;
+					printf("WARNING %d: Actor %d does not need \"Dependent Molecule Type\" defined. Ignoring.\n", numWarn++, curArrayItem);
+				}
+				if(cJSON_bItemValid(curObj,"Dependent Trigger Mode", cJSON_Number))
+				{
+					bWarn = true;
+					printf("WARNING %d: Actor %d does not need \"Dependent Trigger Mode\" defined. Ignoring.\n", numWarn++, curArrayItem);
+				}
+				if(cJSON_bItemValid(curObj,"Dependent Trigger Value", cJSON_Number))
+				{
+					bWarn = true;
+					printf("WARNING %d: Actor %d does not need \"Dependent Trigger Value\" defined. Ignoring.\n", numWarn++, curArrayItem);
+				}
+				if(cJSON_bItemValid(curObj,"Dependent Trigger on Rising Edge?", cJSON_True))
+				{
+					bWarn = true;
+					printf("WARNING %d: Actor %d does not need \"Dependent Trigger on Rising Edge?\" defined. Ignoring.\n", numWarn++, curArrayItem);
+				}
+				if(cJSON_bItemValid(curObj,"Dependent Relay Mode", cJSON_Number))
+				{
+					bWarn = true;
+					printf("WARNING %d: Actor %d does not need \"Dependent Relay Mode\" defined. Ignoring.\n", numWarn++, curArrayItem);
+				}
+				if(cJSON_bItemValid(curObj,"Dependent Relay Gain", cJSON_Number))
+				{
+					bWarn = true;
+					printf("WARNING %d: Actor %d does not need \"Dependent Relay Gain\" defined. Ignoring.\n", numWarn++, curArrayItem);
+				}
+				if(cJSON_bItemValid(curObj,"Dependent Relay Bias", cJSON_Number))
+				{
+					bWarn = true;
+					printf("WARNING %d: Actor %d does not need \"Dependent Relay Bias\" defined. Ignoring.\n", numWarn++, curArrayItem);
+				}
+				if(cJSON_bItemValid(curObj,"Dependent Relay Min Strength", cJSON_Number))
+				{
+					bWarn = true;
+					printf("WARNING %d: Actor %d does not need \"Dependent Relay Min Strength\" defined. Ignoring.\n", numWarn++, curArrayItem);
+				}
+				if(cJSON_bItemValid(curObj,"Dependent Relay Max Strength", cJSON_Number))
+				{
+					bWarn = true;
+					printf("WARNING %d: Actor %d does not need \"Dependent Relay Max Strength\" defined. Ignoring.\n", numWarn++, curArrayItem);
+				}
+			}
 	
 			// Check for existence of unnecessary parameters and display
 			// warnings if they are defined.

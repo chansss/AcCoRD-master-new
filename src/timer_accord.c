@@ -105,7 +105,10 @@ void resetTimerArray(const short NUM_TIMERS,
 	
 	for(curTimer = 0; curTimer < NUM_ACTORS; curTimer++)
 	{
-		timerArray[curTimer].nextTime = actorCommonArray[curTimer].spec.startTime;
+		if(actorCommonArray[curTimer].spec.bIndependent)
+			timerArray[curTimer].nextTime = actorCommonArray[curTimer].spec.startTime;
+		else
+			timerArray[curTimer].nextTime = INFINITY;
 	}
 	
 	timerArray[MESO_TIMER_ID].nextTime = tMeso;
@@ -120,7 +123,10 @@ void updateTimer(const short curTimer,
 	struct timerStruct timerArray[],
 	double tCur)
 {
-	return;
+	if(curTimer < 0 || curTimer >= NUM_TIMERS)
+		return;
+	
+	timerArray[curTimer].nextTime = tCur;
 }
 
 // Build 2D array listing children of heap elements

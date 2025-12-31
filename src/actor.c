@@ -913,8 +913,11 @@ void resetActors(const short NUM_ACTORS,
 	
 	for(curActor = 0; curActor < NUM_ACTORS; curActor++)
 	{
-		actorCommonArray[curActor].nextTime =
-			actorCommonArray[curActor].spec.startTime;
+		if(actorCommonArray[curActor].spec.bIndependent)
+			actorCommonArray[curActor].nextTime =
+				actorCommonArray[curActor].spec.startTime;
+		else
+			actorCommonArray[curActor].nextTime = INFINITY;
 		actorCommonArray[curActor].curAction = 0UL;
 	}
 	
@@ -933,11 +936,20 @@ void resetActors(const short NUM_ACTORS,
 		
 		// First action will be defining a new release and not the actual release of molecules
 		actorActiveArray[curActor].curBit = 0;
-		actorActiveArray[curActor].nextNewReleaseTime =
-			actorCommonArray[actorActiveArray[curActor].actorID].spec.startTime;
-		actorActiveArray[curActor].bNextActionNewRelease = true;
+		if(actorCommonArray[actorActiveArray[curActor].actorID].spec.bIndependent)
+		{
+			actorActiveArray[curActor].nextNewReleaseTime =
+				actorCommonArray[actorActiveArray[curActor].actorID].spec.startTime;
+			actorActiveArray[curActor].bNextActionNewRelease = true;
+		} else
+		{
+			actorActiveArray[curActor].nextNewReleaseTime = INFINITY;
+			actorActiveArray[curActor].bNextActionNewRelease = false;
+		}
 		actorActiveArray[curActor].nextEmissionTime = INFINITY;
 		actorActiveArray[curActor].nextEmissionIndex = 0;
+		actorActiveArray[curActor].depPrevCount = 0ULL;
+		actorActiveArray[curActor].depPrevAbove = false;
 	}
 }
 
@@ -1198,6 +1210,69 @@ void newRelease(const struct actorStruct3D * actorCommon,
 	}
 	
 	// Free memory of new data
+	emptyListData(&newData);
+}
+
+void newReleaseWithStrength(const struct actorStruct3D * actorCommon,
+	struct actorActiveStruct3D * actorActive,
+	double curTime,
+	double strengthOverride)
+{
+	int i;
+	ListData newData;
+	double startTime, endTime, frequency;
+	unsigned short molType;
+	double strength;
+	
+	initializeListData(&newData);
+	for(i = 0; i < actorCommon->spec.modBits; i++)
+	{
+		if(!addData(&newData, true))
+		{
+			fprintf(stderr,"ERROR: Memory allocation for new bit.\n");
+			exit(EXIT_FAILURE);
+		}
+	}
+	transferData(&actorActive->binaryData, &newData);
+	
+	strength = strengthOverride;
+	startTime = 0.;
+	endTime = actorCommon->spec.releaseInterval;
+	frequency = 0.;
+	molType = actorActive->molType[0];
+	
+	if(strength > 0. && actorCommon->spec.bTimeReleaseRand)
+	{
+		startTime = generateExponential(1)/strength;
+	}
+	
+	if(strength > 0.)
+	{
+		switch (actorCommon->spec.modScheme)
+		{
+			case BURST:
+				for(i = 0; i < actorActive->numMolType; i++)
+				{
+					if(!addRelease(&actorActive->releaseList, strength, actorActive->molType[i],
+						curTime + startTime, curTime + endTime, frequency))
+					{
+						fprintf(stderr,"ERROR: Memory allocation for new active actor release.\n");
+						exit(EXIT_FAILURE);
+					}
+				}
+				break;
+			default:
+				if(!addRelease(&actorActive->releaseList, strength, molType,
+					curTime + startTime, curTime + endTime, frequency))
+				{
+					fprintf(stderr,"ERROR: Memory allocation for new active actor release.\n");
+					exit(EXIT_FAILURE);
+				}
+		}
+		
+		findNextEmission(actorCommon, actorActive);
+	}
+	
 	emptyListData(&newData);
 }
 

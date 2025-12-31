@@ -69,6 +69,35 @@
 				"Is Time Recorded with Activity?": false,
 				"Is Molecule Type Observed?": [true],
 				"Is Molecule Position Observed?": [true]
+		},
+		{
+				"Notes": "Dependent active actor triggered by observer count",
+				"Is Location Defined by Regions?": false,
+				"Shape": "Rectangular Box",
+				"Outer Boundary": [0, 10e-6, 0, 10e-6, 0, 10e-6],
+				"Is Actor Active?": true,
+				"Start Time": 0,
+				"Is There Max Number of Actions?": false,
+				"Is Actor Independent?": false,
+				"Action Interval": 1,
+				"Is Actor Activity Recorded?": true,
+				"Dependent Passive Actor ID": 1,
+				"Dependent Molecule Type": 0,
+				"Dependent Trigger Mode": 0,
+				"Dependent Trigger Value": 1,
+				"Dependent Trigger on Rising Edge?": true,
+				"Dependent Relay Mode": 1,
+				"Dependent Relay Gain": 1,
+				"Dependent Relay Bias": 0,
+				"Dependent Relay Min Strength": 0,
+				"Dependent Relay Max Strength": 1e9999,
+				"Random Number of Molecules?": false,
+				"Random Molecule Release Times?": false,
+				"Release Interval": 0,
+				"Slot Interval": 0,
+				"Modulation Scheme": "Burst",
+				"Modulation Strength": 1,
+				"Is Molecule Type Released?": [true]
 		}
 		]		
 	}

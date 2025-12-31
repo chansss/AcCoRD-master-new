@@ -123,9 +123,9 @@
 #include <stdbool.h> // for C++ bool naming, requires C99
 #include <string.h> // for strcpy()
 #include <time.h> // For time record keeping
-#ifndef __linux__
+#ifdef _WIN32
 	#include <direct.h> // for _mkdir() [Windows]
-#endif // __linux__
+#endif
 #include "cJSON.h"
 #include "region.h"
 #include "actor.h"
