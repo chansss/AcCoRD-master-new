@@ -1,0 +1,5 @@
+---
+triple:          'arm64-apple-darwin'
+binary-path:     '../bin/accord_dub_debug.out'
+relocations:     []
+...
