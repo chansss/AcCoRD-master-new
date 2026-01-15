@@ -1,4 +1,3 @@
-*.zip
 update_instructions.txt
 AcCoRD_wiki.txt
 *results/
@@ -9,6 +8,11 @@ fig*
 bin/run_accord_dub.sh
 bin/run_accord_rc.sh
 bin/accord*.sh
+bin/*.out
+bin/*.exe
+bin/benchmark_test
+bin/*.dSYM/
+mingw64.zip
 *.pbs
 *.asv
 *.mp4
