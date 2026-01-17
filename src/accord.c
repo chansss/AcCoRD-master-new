@@ -255,16 +255,34 @@ int main(int argc, char *argv[])
 		spec.NUM_MOL_TYPES,	spec.SUBVOL_BASE_SIZE, DIFF_COEF,
 		spec.MAX_RXNS, spec.chem_rxn);
 	gSoaSimpleEnabled = false;
-	gSoaSimplePool = NULL;
-	gSoaSimpleList = NULL;
+	if(gSoaSimplePools != NULL)
+	{
+		free(gSoaSimplePools);
+		gSoaSimplePools = NULL;
+	}
+	if(gSoaSimpleLists != NULL)
+	{
+		free(gSoaSimpleLists);
+		gSoaSimpleLists = NULL;
+	}
+	gSoaSimpleCount = 0;
 	{
 		const char* soaEnv = getenv("ACCORD_USE_SOA_SIMPLE");
 		if(soaEnv != NULL)
 		{
-			short soaRegion = -1;
-			unsigned short soaType = 0;
+			int maxCandidates = spec.NUM_REGIONS * spec.NUM_MOL_TYPES;
+			MicroMoleculePool** pools = NULL;
+			ListMol3D** lists = NULL;
 			short curRegion;
 			unsigned short curType;
+			int count = 0;
+			pools = malloc((size_t)maxCandidates * sizeof(MicroMoleculePool*));
+			lists = malloc((size_t)maxCandidates * sizeof(ListMol3D*));
+			if(pools == NULL || lists == NULL)
+			{
+				fprintf(stderr, "ERROR: Memory allocation for SoA simple mapping.\n");
+				exit(EXIT_FAILURE);
+			}
 			for(curRegion = 0; curRegion < spec.NUM_REGIONS; curRegion++)
 			{
 				if(!regionArray[curRegion].spec.bMicro)
@@ -283,25 +301,22 @@ int main(int argc, char *argv[])
 						continue;
 					if(spec.MAX_HYBRID_DIST > 0.0)
 						continue;
-					if(soaRegion < 0)
-					{
-						soaRegion = curRegion;
-						soaType = curType;
-					}
-					else
-					{
-						soaRegion = -2;
-						break;
-					}
+					pools[count] = regionArray[curRegion].molPool;
+					lists[count] = &microMolList[curRegion][curType];
+					count++;
 				}
-				if(soaRegion == -2)
-					break;
 			}
-			if(soaRegion >= 0)
+			if(count > 0)
 			{
 				gSoaSimpleEnabled = true;
-				gSoaSimplePool = regionArray[soaRegion].molPool;
-				gSoaSimpleList = &microMolList[soaRegion][soaType];
+				gSoaSimplePools = pools;
+				gSoaSimpleLists = lists;
+				gSoaSimpleCount = count;
+			}
+			else
+			{
+				free(pools);
+				free(lists);
 			}
 		}
 	}
@@ -669,12 +684,25 @@ int main(int argc, char *argv[])
 								actorCommonArray[heapTimer[0]].regionID[curRegionID];
 							if(regionArray[curRegion].spec.bMicro)
 							{	// Search through region's molecule list
-								if(gSoaSimpleEnabled
-									&& regionArray[curRegion].molPool != NULL
-									&& &microMolList[curRegion][curMolType] == gSoaSimpleList)
+					int soaIndex = -1;
+					if(gSoaSimpleEnabled
+						&& gSoaSimplePools != NULL
+						&& gSoaSimpleLists != NULL)
+					{
+						int k;
+						for(k = 0; k < gSoaSimpleCount; k++)
+						{
+							if(&microMolList[curRegion][curMolType] == gSoaSimpleLists[k])
+							{
+								soaIndex = k;
+								break;
+							}
+						}
+					}
+					if(soaIndex >= 0)
 								{
 									actorPassiveArray[curPassive].curMolObs[curMolPassive] +=
-										recordMoleculesPool(regionArray[curRegion].molPool, &molListPassive3D[curMolPassive], actorCommonArray[heapTimer[0]].regionInterType[curRegionID], actorCommonArray[heapTimer[0]].regionInterBound[curRegionID], bRecordPos,
+							recordMoleculesPool(gSoaSimplePools[soaIndex], &molListPassive3D[curMolPassive], actorCommonArray[heapTimer[0]].regionInterType[curRegionID], actorCommonArray[heapTimer[0]].regionInterBound[curRegionID], bRecordPos,
 										actorCommonArray[heapTimer[0]].bRegionInside[curRegionID]) +
 										recordMoleculesRecent(&microMolListRecent[curRegion][curMolType], &molListPassive3D[curMolPassive], actorCommonArray[heapTimer[0]].regionInterType[curRegionID], actorCommonArray[heapTimer[0]].regionInterBound[curRegionID], bRecordPos,
 										actorCommonArray[heapTimer[0]].bRegionInside[curRegionID]);

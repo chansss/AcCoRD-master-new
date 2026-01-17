@@ -173,8 +173,9 @@ typedef NodeMolRecent3D * ListMolRecent3D;
 // micro_molecule specific Prototypes
 
 extern bool gSoaSimpleEnabled;
-extern MicroMoleculePool* gSoaSimplePool;
-extern ListMol3D* gSoaSimpleList;
+extern int gSoaSimpleCount;
+extern MicroMoleculePool** gSoaSimplePools;
+extern ListMol3D** gSoaSimpleLists;
 
 bool addMolecule(ListMol3D * p_list, double x, double y, double z);
 

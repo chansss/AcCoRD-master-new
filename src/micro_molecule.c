@@ -112,8 +112,9 @@
 #include "micro_molecule.h"
 
 bool gSoaSimpleEnabled = false;
-MicroMoleculePool* gSoaSimplePool = NULL;
-ListMol3D* gSoaSimpleList = NULL;
+int gSoaSimpleCount = 0;
+MicroMoleculePool** gSoaSimplePools = NULL;
+ListMol3D** gSoaSimpleLists = NULL;
 
 // Local Function Prototypes
 
@@ -167,6 +168,19 @@ static void poolToListSimple(MicroMoleculePool* pool, ListMol3D list)
 		i++;
 		node = node->next;
 	}
+}
+
+static int getSoaIndex(ListMol3D * list)
+{
+	int i;
+	if(!gSoaSimpleEnabled || gSoaSimpleLists == NULL || gSoaSimplePools == NULL)
+		return -1;
+	for(i = 0; i < gSoaSimpleCount; i++)
+	{
+		if(list == gSoaSimpleLists[i])
+			return i;
+	}
+	return -1;
 }
 
 static void diffuseMolecules_pool_simple(const short NUM_REGIONS,
@@ -316,10 +330,17 @@ static void diffuseMolecules_pool_simple(const short NUM_REGIONS,
 bool addMolecule(ListMol3D * p_list, double x, double y, double z)
 {
 	ItemMol3D new_molecule = {x,y,z, true};
-	if(gSoaSimpleEnabled && gSoaSimplePool != NULL && gSoaSimpleList != NULL && p_list == gSoaSimpleList)
+	if(gSoaSimpleEnabled && gSoaSimplePools != NULL && gSoaSimpleLists != NULL)
 	{
-		pool_add_molecule(gSoaSimplePool, x, y, z, true);
-		return true;
+		int i;
+		for(i = 0; i < gSoaSimpleCount; i++)
+		{
+			if(p_list == gSoaSimpleLists[i])
+			{
+				pool_add_molecule(gSoaSimplePools[i], x, y, z, true);
+				return true;
+			}
+		}
 	}
 	return addItem(new_molecule, p_list);
 }
@@ -375,46 +396,11 @@ void diffuseMolecules(const short NUM_REGIONS,
 
 	bool bRemove, bValidDiffusion;
 	uint32_t minSub;
-	bool bSoaSimpleGlobal;
-	short soaRegion;
-	unsigned short soaType;
 	
 	// A Priori surface reaction parameters
 	bool bApmc; // Is there an A Priori surface reaction that we need to consider?
 	bool bApmcCur; // Did current molecule have (or attempt) an A Priori surface reaction?
 	unsigned short curGlobalRxn;
-
-	bSoaSimpleGlobal = false;
-	soaRegion = -1;
-	soaType = 0;
-	if(gSoaSimpleEnabled && gSoaSimplePool != NULL && gSoaSimpleList != NULL)
-	{
-		for(curRegion = 0; curRegion < NUM_REGIONS; curRegion++)
-		{
-			for(curType = 0; curType < NUM_MOL_TYPES; curType++)
-			{
-				if(&p_list[curRegion][curType] == gSoaSimpleList)
-				{
-					soaRegion = curRegion;
-					soaType = curType;
-					break;
-				}
-			}
-			if(soaRegion >= 0)
-				break;
-		}
-		if(soaRegion >= 0
-			&& regionArray[soaRegion].spec.bMicro
-			&& regionArray[soaRegion].numChemRxn == 0
-			&& !regionArray[soaRegion].bHasMesoNeigh
-			&& HYBRID_DIST_MAX <= 0.0
-			&& regionArray[soaRegion].molPool != NULL
-			&& regionArray[soaRegion].spec.surfaceType == NO_SURFACE
-			&& regionArray[soaRegion].numApmcRxn[soaType] == 0)
-		{
-			bSoaSimpleGlobal = true;
-		}
-	}
 	
 	// Indicate that every microscopic molecule in a "normal" list
 	// needs to be moved.
@@ -424,9 +410,7 @@ void diffuseMolecules(const short NUM_REGIONS,
 	{
 		for(curType = 0; curType < NUM_MOL_TYPES; curType++)
 		{
-			if(bSoaSimpleGlobal
-				&& curRegion == soaRegion
-				&& curType == soaType)
+			if(getSoaIndex(&p_list[curRegion][curType]) >= 0)
 				continue;
 			if(isListMol3DEmpty(&p_list[curRegion][curType])
 				|| (!regionArray[curRegion].bDiffuse[curType]
@@ -448,12 +432,11 @@ void diffuseMolecules(const short NUM_REGIONS,
 	{
 		for(curType = 0; curType < NUM_MOL_TYPES; curType++)
 		{
-			if(bSoaSimpleGlobal
-				&& curRegion == soaRegion
-				&& curType == soaType)
+			int soaIndex = getSoaIndex(&p_list[curRegion][curType]);
+			if(soaIndex >= 0)
 			{
 				MicroMoleculePool* pool;
-				pool = regionArray[curRegion].molPool;
+				pool = gSoaSimplePools[soaIndex];
 				diffuseMolecules_pool_simple(NUM_REGIONS, NUM_MOL_TYPES,
 					pool, curRegion, curType, regionArray, mesoSubArray,
 					sigma, chem_rxn, HYBRID_DIST_MAX, DIFF_COEF);
